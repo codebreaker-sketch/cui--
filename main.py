@@ -80,7 +80,7 @@ def full_run(blocks, src_name):
     world, rejected = F.empty_world(), []
     for i in order:
         m = msgs[i]
-        if m.get("status_hint"):
+        if m.get("status_hint") and not m["f"]:
             m["status"], m["reason"] = "not read", m["status_hint"]
             tr.note("reading", f"message #{m['id']}: {m['status_hint']}")
             continue
@@ -147,7 +147,7 @@ def update_run(st, blocks, src_name):
     world, plan = st["world"], st["plan"]
     replanned, predicted = set(), set()
     for m in msgs:
-        if m.get("status_hint"):
+        if m.get("status_hint") and not m["f"]:
             m["status"], m["reason"] = "not read", m["status_hint"]
             tr.note("reading", f"message #{m['id']}: {m['status_hint']}; plan unchanged (run again to retry)")
             st["seen"].remove(fingerprint(m["text"])) if fingerprint(m["text"]) in st["seen"] else None

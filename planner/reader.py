@@ -358,5 +358,8 @@ def read(blocks, first_id, tracer):
         m["text"] = b
         if reply is None:
             m["status_hint"] = "model call failed or timed out; message not read"
+            if m["f"]:
+                tracer.note("reading", f"message #{m['id']}: model call failed; using the {len(m['f'])} fact(s) "
+                                       "that code labelled on its own")
         out.append(m)
     return out
