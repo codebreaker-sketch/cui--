@@ -73,8 +73,17 @@ def label(text, vals, pos, role):
         if money:
             if re.search(r"per\s*(head|person|plate|box|meal)|/\s*head|fi\s*kas|har\s*band|each person", after[:25]) \
                     or role == "caterer":
-                hits = [(before.rfind(w), t) for w, t in TIERS.items() if w in before]
-                out[n] = ("food_price", max(hits)[1] if hits else "standard")
+                # tier: nearest tier word before the number in this sentence, else after it, else the item's name
+                pre = s[:max(0, s.find(text[p:end].lower()))] if text[p:end].lower() in s else before
+                hits = [(pre.rfind(w), t) for w, t in TIERS.items() if w in pre]
+                tail = re.split(r"[.!?;\n]", after)[0]
+                if re.search(r"\brs\b|pkr|\d", tail):          # a tier word followed by another price is that price's
+                    tail = ""
+                post = [t for w, t in TIERS.items() if re.search(r"\b" + w + r"\b", tail)]
+                name = re.findall(r"[a-z]+", re.split(r"\brs\b|pkr|\d", pre)[0])
+                name = " ".join(w for w in name if w not in ("ab", "hoga", "the", "a", "and", "is", "now", "rates",
+                                                              "update", "per", "head", "wala", "wali"))[-30:].strip()
+                out[n] = ("food_price", max(hits)[1] if hits else post[0] if post else (name or "standard"))
             elif re.search(r"honorar|per judge|each judge|har judge|judge fee", s) and \
                     (role in ("judging", "authority", "finance") or "judge" in s):
                 out[n] = ("judge_fee", "")
@@ -82,11 +91,13 @@ def label(text, vals, pos, role):
                     not re.search(r"from the", before[-25:]):      # who may set it: facts.py R-AUTH
                 out[n] = ("budget", "")
             elif role == "venue" or re.search(r"\bseats\b|capacity|rent", s):
-                name = last_venue or _venue_name(text[max(0, p - 120):p].split(".")[-1])
+                name = last_venue or _venue_name(re.split(r"[.\n!?]", text[max(0, p - 120):p])[-1])
                 if name:
                     out[n] = ("venue_price", name)
             elif role == "student" or (re.search(REQ, s) and not re.search(SPENT, s)):
-                out[n] = ("request", "")
+                wish = re.search(r"(?:have|get|book|arrange|hire|need|want|add|le lein|mangwa)\s+(?:a |an |the |some )?"
+                                 r"([a-z][a-z -]{2,30}?)(?=\s+(?:at|for|in|on|during|bhi|ka|ki)\b|[?.,!]|$)", low)
+                out[n] = ("request", wish.group(1).strip() if wish else "")
             elif re.search(SPENT, low) and role in ("finance", "authority"):
                 out[n] = ("spent", "")
             continue
@@ -118,12 +129,18 @@ def label(text, vals, pos, role):
             out[n] = ("judges_per_team", "")
         elif (re.search(r"\bseats?\s*$|capacity( of| is)?\s*$|accommodates?\s*$|holds?\s*$", before) or
               re.match(r"\s*(seats|seat capacity|log ki capacity)", after)) and (role == "venue" or "seat" in s):
-            name = _venue_name(text[max(0, p - 120):p].split(".")[-1])
+            name = _venue_name(re.split(r"[.\n!?]", text[max(0, p - 120):p])[-1])
             if name:
                 out[n] = ("venue_seats", name)
                 last_venue = name
         elif re.match(r"\s*(boxes|box|meals?|plates?|packets?|servings?|portions?|lunch\w*)", after) and not money:
             out[n] = ("provides", "food")
+    # one unnamed meal option in a message is the standard option ("Biryani Rs 850 per head")
+    tiers = set(TIERS.values())
+    food = [k for k, (l, a) in out.items() if l == "food_price"]
+    unnamed = [k for k in food if out[k][1] not in tiers]
+    if unnamed and not any(out[k][1] == "standard" for k in food):
+        out[unnamed[0]] = ("food_price", "standard")
     # "24 more students ... total is now 144": when one setting is stated twice, drop the change-amount
     delta = re.compile(r"more|additional|extra|dropped|drop out|cancel|left|fewer|less|kam|zyada|aur|backed out|withdr")
     for lab in ("students", "judges", "staff", "hours"):

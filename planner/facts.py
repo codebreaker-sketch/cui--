@@ -29,6 +29,21 @@ KEY_AREA = {
 }
 
 
+# Which areas a setting feeds (people -> seats, boxes, judges, money). Used to predict and re-validate.
+DEPENDS = {
+    "students": {"venue", "food", "judging", "budget", "schedule"},
+    "team_size": {"judging", "budget", "schedule"},
+    "staff": {"venue", "food", "budget"},
+    "judges_available": {"judging"},
+    "judge_fee": {"judging", "budget"},
+    "judge_min_per_team": {"judging", "schedule"},
+    "judge_max_teams": {"judging", "venue", "food", "budget", "schedule"},
+    "judges_per_team": {"judging", "venue", "food", "budget", "schedule"},
+    "hours": {"schedule"}, "start_time": {"schedule"}, "end_time": {"schedule"},
+    "budget": {"budget"}, "contingency_pct": {"budget"},
+}
+
+
 def parse_date(d):
     """'11-09' / '2026-11-09' / '9 Nov' / 'Nov 9' -> (month, day) or None."""
     if not d or not isinstance(d, str):
@@ -131,7 +146,7 @@ def apply_message(world, msg, tracer, strict):
             if old and not supersede("set", k, old, nv):
                 continue
             w["set"][k] = {"v": nv, "value_repr": nv, **src}
-            areas.add(KEY_AREA.get(k, "budget"))
+            areas.update(DEPENDS.get(k, {KEY_AREA.get(k, "budget")}))
         elif t == "venue":
             if role in VENDOR_DENY:
                 problems.append(("R-AUTH", f"venue details from '{msg.get('from')}' ({role}) are not from the venue"))

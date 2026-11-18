@@ -95,7 +95,7 @@ def tag(text, pos=None):
         after = text[m.end():m.end() + 12].lower()
         if re.match(month, after) or (m.start() <= 2 and re.match(r"\s*[|.):\]]", after)):
             continue                     # dates and the message's own index are not facts
-        before = text[:m.start()].split()
+        before = text[:m.start()].split("\n")[-1].split()     # same line only: "13 Jan\n15 judges" is no date
         if before and re.fullmatch(r"(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?,?",
                                    before[-1].lower()):
             continue                     # "Nov 9" style dates
@@ -116,7 +116,8 @@ ROLE_WORDS = [
     ("judge", r"\bjudge\b"),
     ("finance", r"financ|accounts?\b|treasur|bursar|audit"),
     ("caterer", r"cater|kitchen|restaurant|bakery|dhaba|food\s*(vendor|supplier|service)|chef"),
-    ("venue", r"\bhalls?\b|venue|hotel|auditorium|convention|banquet|marquee|event\s*(centre|center|space)"),
+    ("venue", r"\bhalls?\b|venue|hotel|auditorium|convention|banquet|marquee|expo|exhibition|arena|lawns?\b|"
+              r"event\s*(centre|center|space)|cent(re|er)\b"),
     ("student", r"student|society|club|participant|team\s*(lead|member)|volunteer"),
     ("authority", r"dean|registrar|principal|director|rector|\bvc\b|vice.?chancellor|admin|organi[sz]|"
                   r"office|chair|\bhod\b|head\s*of|management|committee|president|ceo|provost"),
@@ -145,8 +146,11 @@ def header(block):
         parts = [p for p in parts if p and not re.fullmatch(r"#?\s*\d+[.)]?", p)
                  and not re.search(r"\b\d{1,2}\s+" + MONTH_RE + r"|\b" + MONTH_RE + r"\s+\d|\d{4}-\d", p, re.I)]
         sender = parts[0] if parts else None
+    elif re.match(r"\s*(?:#?\d+[.)]\s*)?(from|sender|sent by)\s*:", first, re.I):
+        rest = re.sub(r"^\s*(?:#?\d+[.)]\s*)?(from|sender|sent by)\s*:\s*", "", first, flags=re.I)
+        sender = re.split(r"\s*[(,<\[]|\s+-\s+|\s+on\s+\d", rest)[0].strip() or None
     else:
-        m = re.match(r"\s*(?:#?\d+[.)]\s*)?(?:from\s*:\s*)?([A-Za-z][\w'’ .&()-]{1,40}?)\s*(?::|\bhere\b)", first, re.I)
+        m = re.match(r"\s*(?:#?\d+[.)]\s*)?(?:\[[^\]]*\]\s*)?([A-Za-z][\w'’ .&()-]{1,40}?)\s*(?::|\bhere\b)", first, re.I)
         if m:
             sender = m.group(1).strip()
     probe = (sender or first[:60]).lower()
@@ -212,7 +216,8 @@ def parse_one(reply, vals, mid, text="", pos=None):
         elif label == "venue_price":
             venue(arg)["price"] = v
         elif label == "food_price":
-            tier = next((t for t in ("basic", "standard", "premium") if t in arg.lower()), "standard")
+            tier = next((t for t in ("basic", "standard", "premium") if t in arg.lower()), None) \
+                or (arg.lower().strip() or "standard")      # an unnamed tier keeps the item's own name
             cur["f"].append({"t": "food", "tier": tier, "pph": v, "name": f"{tier.capitalize()} box"})
         elif label in ("spent", "request"):
             cur["f"].append({"t": "spent" if label == "spent" else "req", "item": arg or label, "amt": v})
@@ -328,6 +333,10 @@ def parse_one(reply, vals, mid, text="", pos=None):
         cur["role"] = h_role
     if h_date:
         cur["date"] = h_date
+    # a "venue" with no seats, price, feature or availability is a model guess (often the sender): drop it
+    keep_role = (h_role or cur["role"]) == "venue"
+    cur["f"] = [f for f in cur["f"] if f.get("t") != "venue" or f.get("cap") is not None or f.get("price") is not None
+                or f.get("avail") is False or (keep_role and f.get("feat"))]
     if not cur["f"]:
         cur["rel"] = False
     return cur
