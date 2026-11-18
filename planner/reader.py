@@ -7,6 +7,8 @@ a figure, and its reply stays very short (few tokens).
 """
 import re
 
+from . import rules
+
 SYSTEM = """You label numbers in ONE message about planning a hackathon (English or Roman Urdu). Each number is tagged like 150(#2).
 Reply ONLY with lines. First line: M | <sender> | <role> | <MM-DD or ->
 role: authority (dean/admin/organiser), finance, venue, caterer, judging (coordinator), judge (one judge), student, other
@@ -177,6 +179,23 @@ def parse_one(reply, vals, mid, text="", pos=None):
     h_sender, h_date, h_role = header(text) if text else (None, None, None)
     spent_cue, req_cue = bool(SPENT_CUE.search(text)), bool(REQ_CUE.search(text))
     venues = {}
+    if text:
+        # code-first labels (planner/rules.py) override the model's label for the same number
+        role0 = h_role
+        if not role0:
+            mm = re.search(r"(?m)^\s*M\s*\|[^|]*\|\s*([a-z]+)", reply)
+            role0 = mm.group(1).lower() if mm and mm.group(1).lower() in ROLES else "other"
+        sure, extra = rules.label(text, vals, pos, role0)
+        for ln in reply.splitlines():          # keep the model's item name ("request photographer") if code has none
+            mm = re.match(r"\s*#\s*(\d+)\s*[:.\-]?\s*(spent|request)\s+(.+)", ln, re.I)
+            if mm and int(mm.group(1)) in sure and sure[int(mm.group(1))][0] in ("spent", "request") \
+                    and not sure[int(mm.group(1))][1] and not re.search(r"\d", mm.group(3)):
+                sure[int(mm.group(1))] = (sure[int(mm.group(1))][0], mm.group(3).strip(" |:-"))
+        kept = [ln for ln in reply.splitlines()
+                if not ((mm := re.match(r"\s*#\s*(\d+)", ln)) and int(mm.group(1)) in sure)]
+        kept = [ln for ln in kept if not re.match(r"\s*(require venue|unavailable)\b", ln, re.I) or not extra]
+        reply = "\n".join(kept + [f"#{k} {lab} {arg}".rstrip() for k, (lab, arg) in sure.items()] + extra)
+        cur["code_labels"] = {str(k): lab for k, (lab, _) in sure.items()}
 
     def venue(name):
         key = re.sub(r"\s+", " ", (name or "venue").strip()).title()
@@ -184,6 +203,31 @@ def parse_one(reply, vals, mid, text="", pos=None):
             venues[key] = {"t": "venue", "name": key, "feat": []}
             cur["f"].append(venues[key])
         return venues[key]
+
+    def emit(label, arg, v):
+        if label in SET_LABELS:
+            cur["f"].append({"t": "set", "k": SET_LABELS[label], "v": v})
+        elif label == "venue_seats":
+            venue(arg)["cap"] = v
+        elif label == "venue_price":
+            venue(arg)["price"] = v
+        elif label == "food_price":
+            tier = next((t for t in ("basic", "standard", "premium") if t in arg.lower()), "standard")
+            cur["f"].append({"t": "food", "tier": tier, "pph": v, "name": f"{tier.capitalize()} box"})
+        elif label in ("spent", "request"):
+            cur["f"].append({"t": "spent" if label == "spent" else "req", "item": arg or label, "amt": v})
+        elif label == "provides":
+            item = "food" if "food" in arg.lower() or "box" in arg.lower() else \
+                "venue_seats" if "seat" in arg.lower() else "judges" if "judge" in arg.lower() else arg.lower()
+            cur["f"].append({"t": "qty", "item": item, "v": v})
+        elif label == "break_minutes":
+            cur["f"].append({"t": "need", "area": "schedule", "kind": "break", "what": arg or "break", "v": v, "at": None})
+        elif label == "extra_people":
+            cur["f"].append({"t": "need", "area": "food", "kind": "extra_people", "what": arg or "extra", "v": v, "at": None})
+        elif label == "surcharge_pct":
+            cur["f"].append({"t": "need", "area": "budget", "kind": "surcharge", "what": (arg or "all").lower(), "v": v, "at": None})
+        elif label == "max_cost":
+            cur["f"].append({"t": "need", "area": "budget", "kind": "max_cost", "what": (arg or "").lower(), "v": v, "at": None})
 
     for line in reply.splitlines():
         line = line.strip().strip("`").strip()
@@ -195,7 +239,7 @@ def parse_one(reply, vals, mid, text="", pos=None):
             cur["from"] = p[0] if p else "?"
             role = (p[1] if len(p) > 1 else "other").lower()
             cur["role"] = role if role in ROLES else "other"
-            cur["date"] = _none(p[2]) if len(p) > 2 else None
+            # the date is read by code only (header); a model-guessed date could wrongly mark a message stale
             continue
         m = re.match(r"#\s*(\d+)\s*[:.\-]?\s*([a-z_]+)\s*(.*)", line, re.I)
         if m:
@@ -204,6 +248,13 @@ def parse_one(reply, vals, mid, text="", pos=None):
                 continue
             v = vals[n]
             role = h_role or cur["role"]
+            if str(n) in cur.get("code_labels", {}):           # labelled by code: no guessing needed
+                if label == "ignore":
+                    continue
+                if label in ("spent", "request") and not arg:
+                    arg = _item_before(text, pos.get(n, 0)) or label
+                emit(label, arg, v)
+                continue
             # code guards against the most common small-model mislabels
             after = text[pos.get(n, 0):pos.get(n, 0) + 30].lower()
             before = text[max(0, pos.get(n, 0) - 45):pos.get(n, 0)].lower()
@@ -245,29 +296,7 @@ def parse_one(reply, vals, mid, text="", pos=None):
             if label == "ignore" or re.search(r"(?i)(\bnot\s*,?\s*|instead of|pehle|\bold|previous)\s*(rs\.?|pkr)?\s*$",
                                                 text[max(0, pos.get(n, 0) - 16):pos.get(n, 0)]):
                 continue                     # "Rs 15,000, not Rs 10,000": the replaced figure is not a fact
-            if label in SET_LABELS:
-                cur["f"].append({"t": "set", "k": SET_LABELS[label], "v": v})
-            elif label == "venue_seats":
-                venue(arg)["cap"] = v
-            elif label == "venue_price":
-                venue(arg)["price"] = v
-            elif label == "food_price":
-                tier = next((t for t in ("basic", "standard", "premium") if t in arg.lower()), "standard")
-                cur["f"].append({"t": "food", "tier": tier, "pph": v, "name": f"{tier.capitalize()} box"})
-            elif label in ("spent", "request"):
-                cur["f"].append({"t": "spent" if label == "spent" else "req", "item": arg or label, "amt": v})
-            elif label == "provides":
-                item = "food" if "food" in arg.lower() or "box" in arg.lower() else \
-                    "venue_seats" if "seat" in arg.lower() else "judges" if "judge" in arg.lower() else arg.lower()
-                cur["f"].append({"t": "qty", "item": item, "v": v})
-            elif label == "break_minutes":
-                cur["f"].append({"t": "need", "area": "schedule", "kind": "break", "what": arg or "break", "v": v, "at": None})
-            elif label == "extra_people":
-                cur["f"].append({"t": "need", "area": "food", "kind": "extra_people", "what": arg or "extra", "v": v, "at": None})
-            elif label == "surcharge_pct":
-                cur["f"].append({"t": "need", "area": "budget", "kind": "surcharge", "what": (arg or "all").lower(), "v": v, "at": None})
-            elif label == "max_cost":
-                cur["f"].append({"t": "need", "area": "budget", "kind": "max_cost", "what": (arg or "").lower(), "v": v, "at": None})
+            emit(label, arg, v)
             continue
         p = [x.strip() for x in line.split("|")]
         if low.startswith("feature"):

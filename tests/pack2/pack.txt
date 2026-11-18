@@ -1,0 +1,26 @@
+1 | Registrar, email | 5 Dec
+"Final approval: a 5-hour coding event for 120 students, teams of 4. Total budget Rs 500,000. Eight staff and 6 volunteers will need lunch too. Event starts at 9:00 am. Keep a 20 minute Zuhr prayer break."
+
+2 | Comsats Convention Centre, email | 1 Dec
+"Auditorium 1 seats 150 at Rs 90,000. Seminar Hall seats 250 at Rs 130,000. Lab Block seats 100 at Rs 50,000. Only the Seminar Hall has wheelchair access."
+
+3 | Registrar office, WhatsApp | 6 Dec
+"Venue must have wheelchair access, one of our students uses a wheelchair."
+
+4 | Khan Caterers, WhatsApp | 25 Nov
+"Biryani box Rs 700 per head."
+
+5 | Khan Caterers, WhatsApp | 3 Dec
+"Assalam o alaikum, rates update: biryani box ab Rs 850 per head, simple sandwich box Rs 500. GST included."
+
+6 | Jury coordinator, email | 2 Dec
+"12 judges confirmed. Honorarium Rs 4,000 per judge. Each judge needs 20 minutes per team and can see at most 3 teams."
+
+7 | Accounts, email | 4 Dec
+"Already paid from the event budget: trophies Rs 60,000, banners Rs 15,000."
+
+8 | CS Society, WhatsApp | 4 Dec
+"Bhai photographer bhi le lein? Rs 25,000 ka quote hai."
+
+9 | Parking office, email | 30 Nov
+"Reminder: visitor parking passes must be collected from Gate 2."

@@ -213,7 +213,9 @@ def main():
         sys.stdout.reconfigure(encoding="utf-8")
     except Exception:
         pass
-    path = sys.argv[1] if len(sys.argv) > 1 else INBOX
+    path = os.path.abspath(sys.argv[1]) if len(sys.argv) > 1 else None
+    os.chdir(os.path.dirname(os.path.abspath(__file__)))     # state/, out/, messages.txt live next to main.py
+    path = path or INBOX
     if not os.path.exists(path):
         print(f"No input file '{path}'. Put the message pack (or a new message) in {INBOX} and run: python main.py")
         sys.exit(1)
