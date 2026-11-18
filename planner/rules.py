@@ -11,7 +11,8 @@ import re
 
 SPENT = r"already|ordered|paid|spent|bought|purchased|booked|\bbill\b|invoice|kharch|le li|order kar|de diy|came in at"
 REQ = r"can we|could we|should we|\brequest|wish|would like|chahiye|kya hum|quote|le lein|optional|\?"
-TIERS = {"basic": "basic", "simple": "basic", "economy": "basic", "standard": "standard",
+TIERS = {"basic": "basic", "simple": "basic", "economy": "basic", "sada": "basic", "saada": "basic",
+         "standard": "standard", "normal": "standard",
          "premium": "premium", "deluxe": "premium", "special": "premium"}
 
 
@@ -80,7 +81,8 @@ def label(text, vals, pos, role):
                 if re.search(r"\brs\b|pkr|\d", tail):          # a tier word followed by another price is that price's
                     tail = ""
                 post = [t for w, t in TIERS.items() if re.search(r"\b" + w + r"\b", tail)]
-                name = re.findall(r"[a-z]+", re.split(r"\brs\b|pkr|\d", pre)[0])
+                segs = [x for x in re.split(r"\brs\b|pkr|\d", pre) if re.search(r"[a-z]", x)]
+                name = re.findall(r"[a-z]+", re.split(r"[,:;]", segs[-1])[-1] if segs else "")
                 name = " ".join(w for w in name if w not in ("ab", "hoga", "the", "a", "and", "is", "now", "rates",
                                                               "update", "per", "head", "wala", "wali"))[-30:].strip()
                 out[n] = ("food_price", max(hits)[1] if hits else post[0] if post else (name or "standard"))
@@ -101,7 +103,17 @@ def label(text, vals, pos, role):
             elif re.search(SPENT, low) and role in ("finance", "authority"):
                 out[n] = ("spent", "")
             continue
-        # plain counts
+        # plain counts. Roman Urdu / English "noun first": "students ki tadaad ab 165", "judges: 18", "staff hoga 12"
+        nf = re.search(r"\b(students?|talba|bachon|bachay|participants?|judges?|staff|volunteers?)\b[\w\s]{0,6}?"
+                       r"(?:\s*(?:ki|ka|ke)\s*(?:tadaad|tadad|number|ginti))?\s*(?:ab|now|is|hai|hain|hogi|hoga|=|:|to)?\s*"
+                       r"(?:ab|now|kul|total)?\s*$", before)
+        if nf and not re.match(r"\s*(students?|participants?|judges?|staff|volunteers?|teams?|minutes?|hours?|%)", after):
+            noun = nf.group(1)
+            lab = ("students" if noun.startswith(("stud", "talba", "bach", "partic")) else
+                   "judges" if noun.startswith("judge") else "staff" if noun == "staff" else "extra_people")
+            if lab != "judges" or role in ("judging", "authority"):
+                out[n] = (lab, "volunteers" if lab == "extra_people" else "")
+                continue
         if re.match(r"\s*(more |additional |extra |new |aur )?(students?|participants?|talib)", after):
             out[n] = ("students", "")
         elif re.search(r"teams? of\s*$", before) or re.match(r"\s*(-\s*)?(member|students?|people|log)\s*(per|in each|har)\s*team", after):

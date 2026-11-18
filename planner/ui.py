@@ -38,7 +38,8 @@ details{border:1px solid var(--line);border-radius:10px;padding:8px 12px;margin:
 .rej{border:1px solid var(--bad);border-radius:12px;padding:12px;margin:10px 0;background:color-mix(in srgb,var(--bad) 7%,var(--card))}
 .hide{display:none}
 </style></head><body>
-<header><h1>Hackathon Planner <span class="sub" style="font-size:14px">· reads the messages, plans the event, explains every decision</span></h1></header>
+<header style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap"><h1>Hackathon Planner <span class="sub" style="font-size:14px">· reads the messages, plans the event, explains every decision</span></h1>
+<button id="lang" title="Language / Zubaan" style="border:1px solid var(--line);background:var(--card);color:var(--ink);padding:7px 14px;border-radius:999px;cursor:pointer;font-weight:600">Roman Urdu</button></header>
 <div class="wrap">
 <div class="kpis" id="kpis"></div>
 <nav id="nav"></nav>
@@ -47,6 +48,56 @@ details{border:1px solid var(--line);border-radius:10px;padding:8px 12px;margin:
 </div>
 <script>
 const S = __DATA__;
+let LANG='en';try{LANG=localStorage.getItem('lang')||'en'}catch(e){}
+const UR={
+ 'reads the messages, plans the event, explains every decision':'messages parhta hai, event plan karta hai, har faisla samjhata hai',
+ 'Hackathon Planner':'Hackathon Planner','Runs & tokens':'Runs aur tokens','+ New message':'+ Naya message','Inbox':'Inbox',
+ 'Rejected':'Rad shuda','Trace':'Trace','Plan':'Plan','checks pass':'checks pass','people to seat & feed':'logon ko bithana aur khilana',
+ 'left in budget':'budget mein baqi','messages rejected':'messages rad kiye','tokens, all runs':'tokens, tamam runs','INVALID':'GHALAT','VALID':'DURUST',
+ 'Constraints & decisions in force':'Laagu shartein aur faislay','Other constraints noted':'Doosri shartein (note ki gayi)',
+ 'Checks':'Checks','Venue':'Jagah (Venue)','Food':'Khana','Judging':'Judging','Schedule':'Schedule','Budget':'Budget',
+ 'Correct figures':'Figures durust','Within budget':'Budget ke andar','Venue fits':'Jagah kaafi hai','Schedule valid':'Schedule durust',
+ 'Enough judges':'Judges kaafi hain','All areas covered':'Tamam areas shamil','PASS':'THEEK','FAIL':'NAKAAM',
+ 'seats for':'seats, logon ke liye:','people':'log','full':'bhara hua','Why not the others':'Baqi kyun nahi','No valid venue':'Koi durust jagah nahi',
+ 'per head':'fi kas','alternative':'mutabadil','students':'students','judges':'judges','staff':'staff','teams each':'teams har judge',
+ 'judging block':'judging block','confirmed':'confirmed','on standby':'standby par','cover for late/absent judges':'late/ghair hazir judges ki jagah',
+ 'Total':'Kul','Left':'Baqi','Declined':'Mana kiya','out of date':'purana (out of date)','replaced by':'ki jagah aya',
+ 'Message #':'Message #','rejected · rule':'rad kiya gaya · rule','Why:':'Wajah:',
+ 'The plan was kept valid; nothing from this message was applied.':'Plan durust rakha gaya; is message ki koi cheez laagu nahi ki gayi.',
+ 'No messages rejected yet.':'Abhi tak koi message rad nahi hua.','facts extracted':'nikaale gaye facts',
+ 'accepted':'qabool','partly rejected':'jazvi rad','rejected':'rad','ignored':'nazar andaz','not read':'parha nahi gaya',
+ 'model call(s)':'model call(s)','Raw printed trace':'Asal printed trace','Input':'Input','Output':'Output',
+ 'Run':'Run','Model calls':'Model calls','Areas that called a model':'Jin areas ne model call kiya','Predicted (before run)':'Pesh-goi (run se pehle)',
+ 'Areas re-planned (code)':'Dobara plan hue areas (code)','Tokens':'Tokens','Time':'Waqt','none':'koi nahi',
+ 'Only the reading step uses a model. Venue, schedule, food, judging and budget are pure code, so a new message costs one small model call and re-plans only the areas whose numbers changed.':
+ 'Sirf reading step model use karta hai. Venue, schedule, khana, judging aur budget sirf code hain, is liye naya message sirf aik chhoti model call leta hai aur sirf wohi areas dobara plan hote hain jin ke numbers badle.',
+ 'Submit a new message':'Naya message bhejein',
+ "Goes through the same pipeline as":'Wohi pipeline jo',
+ "one 'reading' model call per message, then code re-plans and validates. A message that would break the plan is rejected and the plan is kept.":
+ "har message par aik 'reading' model call, phir code plan aur validation karta hai. Jo message plan tor de woh rad hota hai aur plan wesa hi rehta hai.",
+ 'Run update':'Update chalayein','Upload a .txt file':'.txt file upload karein',
+ 'A whole pack starts a fresh plan; a file with new message(s) is an update. Drag the file here or':'Poora pack naya plan banata hai; naye message(s) wali file update hai. File yahan drag karein ya',
+ 'Files:':'Files:','running (max 120 s)...':'chal raha hai (zyada se zyada 120 s)...','done · reload dashboard':'mukammal · dashboard reload karein',
+ 'e.g. Finance here. The printing bill came in at Rs 15,000, not Rs 10,000.':'maslan: Finance here. Printing ka bill Rs 15,000 aya, Rs 10,000 nahi.',
+ 'Opening & briefing':'Aaghaz aur briefing','Build session':'Build session','Lunch':'Lunch','Closing & prizes':'Ikhtitaam aur inamaat',
+ 'Judging (teams at tables, judges rotate)':'Judging (teams tables par, judges ghoomtay hain)','min':'min',
+ 'Already spent':'Pehle se kharch','Judge honorarium':'Judges ka honorarium','Approved request':'Manzoor shuda request',
+ 'Contingency reserve':'Hangami reserve','lacks required':'mein zaroori cheez nahi:','not available':'dastiyab nahi','needed':'chahiye',
+ 'only a wish from':'sirf aik khwahish:','nobody with budget authority approved it, so it is not paid for':'budget ke ikhtiyar wale kisi ne manzoor nahi kiya, is liye paisa nahi diya gaya',
+ 'does not fit in the budget with essentials first':'zaroori cheezon ke baad budget mein gunjaish nahi',
+ 'Language / Zubaan':'Zubaan / Language'
+};
+const UR_PAIRS=Object.entries(UR).sort((a,b)=>b[0].length-a[0].length);
+const T=s=>LANG==='ur'&&UR[s]?UR[s]:s;
+const RULES=LANG==='ur'?{
+ 'R-COVER':'R-COVER: kisi ki di hui tadaad (khana, seats, judges) plan ki zaroorat se kam hai.',
+ 'R-AUTH':'R-AUTH: bhejne wale ko yeh setting badalne ka ikhtiyar nahi.',
+ 'R-STALE':'R-STALE: yeh message us fact se purana hai jise badalna chahta hai.',
+ 'R-VALID':'R-VALID: isay maanne se 6 checks mein se koi nakaam ho jata.'}:{
+ 'R-COVER':'R-COVER: a promised quantity (food, seats, judges) is below what the plan needs.',
+ 'R-AUTH':'R-AUTH: the sender has no authority over this setting.',
+ 'R-STALE':'R-STALE: the message is older than the fact it tries to replace.',
+ 'R-VALID':'R-VALID: accepting it would make one of the 6 checks fail.'};
 const P = S.plan, fmt = n => n==null?'-':'Rs '+Number(n).toLocaleString('en-PK');
 const esc = s => String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const src = id => id?`<span class="chip">msg #${id}</span>`:'';
@@ -102,7 +153,7 @@ document.getElementById('t-inbox').innerHTML=S.messages.map(m=>{const st=(m.stat
 
 // ---------- REJECTED
 document.getElementById('t-rej').innerHTML=S.rejected.length?S.rejected.map(r=>`<div class="rej"><b class="bad">Message #${r.msg} rejected · rule ${esc(r.rule)}</b>
-<div style="margin:6px 0">“${esc(r.text)}”</div><div><b>Why:</b> ${esc(r.reason)}</div><div class="sub">The plan was kept valid; nothing from this message was applied.</div></div>`).join('')
+<div style="margin:6px 0">“${esc(r.text)}”</div><div><b>Why:</b> ${esc(r.reason)}</div><div class="sub">${esc(RULES[r.rule]||'')}</div><div class="sub">The plan was kept valid; nothing from this message was applied.</div></div>`).join('')
  :'<div class="card">No messages rejected yet.</div>';
 
 // ---------- TRACE
@@ -122,13 +173,30 @@ ${S.runs.map(r=>`<tr><td>${esc(r.label)}</td><td>${r.calls}</td><td>${r.model_ar
 document.getElementById('t-new').innerHTML=`<div class="card"><h3>Submit a new message</h3>
 <p class="sub">Goes through the same pipeline as <code>python main.py</code>: one 'reading' model call per message, then code re-plans and validates. A message that would break the plan is rejected and the plan is kept.</p>
 <textarea id="nm" rows="6" style="width:100%;font:inherit;padding:8px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--ink)" placeholder="e.g. Finance here. The printing bill came in at Rs 15,000, not Rs 10,000."></textarea>
-<p><button id="nb" style="padding:8px 16px;border-radius:999px;border:0;background:var(--acc);color:#fff;font-weight:600;cursor:pointer">Run update</button> <span id="ns" class="sub"></span></p><pre id="no" class="hide"></pre>
+<p><button id="nb" style="padding:8px 16px;border-radius:999px;border:0;background:var(--acc);color:#fff;font-weight:600;cursor:pointer">Run update</button> <span id="ns" class="sub"></span></p>
+<div id="drop" style="border:2px dashed var(--line);border-radius:12px;padding:18px;text-align:center;margin:10px 0">
+<b>Upload a .txt file</b><br><span class="sub">A whole pack starts a fresh plan; a file with new message(s) is an update. Drag the file here or</span>
+<input type="file" id="nf" accept=".txt,text/plain"></div><pre id="no" class="hide"></pre>
 <p class="sub">Files: <a href="/out/final_plan.json">final_plan.json</a> · <a href="/out/execution_trace.json">execution_trace.json</a> · <a href="/out/rejected_messages.json">rejected_messages.json</a> · <a href="/out/final_report.txt">final_report.txt</a></p></div>`;
-const nb=document.getElementById('nb');if(nb)nb.onclick=async()=>{const t=document.getElementById('nm').value.trim();if(!t)return;
- nb.disabled=true;document.getElementById('ns').textContent='running (max 60 s)...';
- const r=await fetch('/api/message',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:t})}).then(r=>r.json()).catch(e=>({output:String(e)}));
- const o=document.getElementById('no');o.classList.remove('hide');o.textContent=r.output||r.error;document.getElementById('ns').innerHTML='done · <a href="#rej" onclick="location.reload()">reload dashboard</a>';nb.disabled=false};
+async function send(url,payload){const nb=document.getElementById('nb');nb.disabled=true;
+ document.getElementById('ns').textContent=T('running (max 120 s)...');
+ const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}).then(r=>r.json()).catch(e=>({output:String(e)}));
+ const o=document.getElementById('no');o.classList.remove('hide');o.textContent=r.output||r.error;
+ document.getElementById('ns').innerHTML='<a href="#plan" onclick="setTimeout(()=>location.reload(),50)">'+T('done · reload dashboard')+'</a>';nb.disabled=false}
+const nb=document.getElementById('nb');if(nb)nb.onclick=()=>{const t=document.getElementById('nm').value.trim();if(t)send('/api/message',{text:t})};
+function upload(f){if(!f)return;f.text().then(t=>send('/api/upload',{name:f.name,text:t}))}
+const nf=document.getElementById('nf');if(nf)nf.onchange=()=>upload(nf.files[0]);
+const dz=document.getElementById('drop');if(dz){dz.ondragover=e=>{e.preventDefault();dz.style.borderColor='var(--acc)'};
+ dz.ondragleave=()=>dz.style.borderColor='var(--line)';dz.ondrop=e=>{e.preventDefault();upload(e.dataTransfer.files[0])}}
 show(tabs.some(t=>t[0]===cur)?cur:'plan');
+// ---------- LANGUAGE: English / Roman Urdu (interface text only; trace lines stay exactly as printed)
+function translate(root){if(LANG!=='ur')return;const w=document.createTreeWalker(root,NodeFilter.SHOW_TEXT,{acceptNode:n=>n.parentElement.closest('pre,textarea,code')?2:1});
+ const nodes=[];while(w.nextNode())nodes.push(w.currentNode);
+ for(const n of nodes){let s=n.nodeValue;for(const [en,ur] of UR_PAIRS){if(s.includes(en))s=s.split(en).join(ur)}n.nodeValue=s}
+ document.querySelectorAll('[placeholder]').forEach(e=>e.placeholder=T(e.placeholder))}
+document.getElementById('lang').textContent=LANG==='ur'?'English':'Roman Urdu';
+document.getElementById('lang').onclick=()=>{try{localStorage.setItem('lang',LANG==='ur'?'en':'ur')}catch(e){}location.reload()};
+translate(document.body);
 if(!served)setTimeout(()=>location.reload(),8000);
 </script></body></html>"""
 

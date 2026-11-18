@@ -25,6 +25,7 @@ from planner.trace import Tracer
 STATE = os.path.join("state", "state.json")
 OUT = "out"
 INBOX = "messages.txt"
+INBOX_DIR = "inbox"
 PACK_MIN = 4
 FULL_LIMIT_S, UPDATE_LIMIT_S, UPDATE_MAX_CALLS = 120, 60, 5
 
@@ -215,15 +216,37 @@ def main():
         pass
     path = os.path.abspath(sys.argv[1]) if len(sys.argv) > 1 else None
     os.chdir(os.path.dirname(os.path.abspath(__file__)))     # state/, out/, messages.txt live next to main.py
-    path = path or INBOX
-    if not os.path.exists(path):
-        print(f"No input file '{path}'. Put the message pack (or a new message) in {INBOX} and run: python main.py")
+    if path:
+        files = [path]
+    else:
+        # messages.txt plus any .txt dropped in inbox/, oldest first. Each file is processed on its own,
+        # and only messages never seen before count, so re-running never repeats work.
+        files = [INBOX] if os.path.exists(INBOX) else []
+        if os.path.isdir(INBOX_DIR):
+            files += [os.path.join(INBOX_DIR, f) for f in os.listdir(INBOX_DIR) if f.lower().endswith(".txt")]
+        files.sort(key=os.path.getmtime)
+    if not files:
+        print(f"No input. Put the pack (or a new message) in {INBOX}, or drop a .txt file in {INBOX_DIR}/, "
+              "then run: python main.py")
         sys.exit(1)
-    with open(path, encoding="utf-8-sig") as fh:
-        raw = fh.read()
-    st = process(raw, os.path.basename(path))
-    if st is None:
-        sys.exit(2)
+    seen = set((load_state() or {}).get("seen", []))
+    todo = []
+    for f in files:
+        with open(f, encoding="utf-8-sig") as fh:
+            raw = fh.read()
+        if path or any(fingerprint(b) not in seen for b in reader.split_messages(raw)):
+            todo.append((f, raw))
+            seen |= {fingerprint(b) for b in reader.split_messages(raw)}
+    if not todo:
+        print("No new messages in messages.txt or inbox/ (all processed before). Current plan:")
+        st = load_state()
+        if st:
+            report.print_plan(st)
+        return
+    for f, raw in todo:
+        print(f"\n>>> reading {f}")
+        if process(raw, os.path.basename(f)) is None:
+            sys.exit(2)
 
 
 def process(raw, src_name):

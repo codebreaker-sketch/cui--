@@ -9,6 +9,8 @@ import contextlib
 import io
 import json
 import os
+import re
+import time
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -45,21 +47,25 @@ class H(BaseHTTPRequestHandler):
         self._send(404, "not found")
 
     def do_POST(self):
-        if self.path != "/api/message":
+        if self.path not in ("/api/message", "/api/upload"):
             return self._send(404, "not found")
         n = int(self.headers.get("Content-Length") or 0)
         try:
-            text = json.loads(self.rfile.read(n).decode("utf-8")).get("text", "").strip()
+            body = json.loads(self.rfile.read(n).decode("utf-8"))
+            text = (body.get("text") or "").strip()
         except ValueError:
             return self._send(400, json.dumps({"error": "bad JSON"}), "application/json")
         if not text:
             return self._send(400, json.dumps({"error": "empty message"}), "application/json")
         buf = io.StringIO()
         with LOCK, contextlib.redirect_stdout(buf):
-            # keep a copy in the inbox file so `python main.py` sees the same history
-            with open(main.INBOX, "a", encoding="utf-8") as fh:
-                fh.write("\n\n" + text + "\n")
-            st = main.process(text, "web form")
+            # keep a copy in inbox/ so `python main.py` sees the same history and never repeats it
+            os.makedirs(main.INBOX_DIR, exist_ok=True)
+            name = re.sub(r"[^\w.-]", "_", os.path.basename(body.get("name") or "")) or "web_message"
+            name = time.strftime("%H%M%S_") + (name if name.lower().endswith(".txt") else name + ".txt")
+            with open(os.path.join(main.INBOX_DIR, name), "w", encoding="utf-8") as fh:
+                fh.write(text + "\n")
+            st = main.process(text, name)
         self._send(200, json.dumps({"ok": st is not None, "output": buf.getvalue()}), "application/json")
 
     def log_message(self, *a):

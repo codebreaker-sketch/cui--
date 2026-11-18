@@ -17,6 +17,13 @@ It reads **`messages.txt`** (next to `main.py`; git-ignored, so `git status` sta
 Setup: `pip install requests`, then copy `.env.example` to `.env`. Any OpenAI-compatible endpoint works
 (`BASE_URL`, `API_KEY`, `MODEL_NAME`; local Ollama, Groq, OpenAI ...).
 
+**Three ways to give it messages** (all run the same pipeline, and nothing is ever processed twice):
+1. Paste into `messages.txt`, then run `python main.py`.
+2. Drop any `.txt` file into the `inbox/` folder, then run `python main.py`. Every file with unseen messages is processed, oldest first.
+3. Web UI (`python server.py`): the "+ New message" tab, where you type a message or upload/drag a `.txt` file. The file is saved into `inbox/` and processed immediately.
+
+**Languages:** messages may be in English or Roman Urdu (e.g. "students ki tadaad ab 165 hai", "Rs 950 fi kas, sada box Rs 600", "zyada se zyada 3 teams"). The dashboard has an **English / Roman Urdu** button (top right) that switches the interface text, check names and rejection explanations. The trace stays exactly as printed in the terminal.
+
 Outputs (in `out/`): `final_plan.json`, `execution_trace.json`, `rejected_messages.json`,
 `final_report.txt` (plan plus full printed trace, ready to upload) and `index.html` (dashboard).
 Web UI with a "New message" box: `python server.py`, then open http://localhost:8000.
