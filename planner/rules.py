@@ -40,6 +40,16 @@ def label(text, vals, pos, role):
     out, extra = {}, []
     low = text.lower()
     last_venue = None
+    # if the message names exactly one venue ("Hall B pay shift... us main 150 seats"), seats/prices without a
+    # name next to them belong to it
+    kinds = r"(?:Hall|Room|Auditorium|Lab|Block|Marquee|Lawn|Ballroom)"
+    first = [(m.span(), m.group(0)) for m in re.finditer(r"\b" + kinds + r"\s+[A-Z0-9][\w-]*\b", text)]
+    named = {g for _, g in first}
+    for m in re.finditer(r"\b([A-Z][\w-]*)\s+(?:Hall|Room|Auditorium|Lab|Block|Centre|Center|Marquee|Lawn)\b", text):
+        overlaps = any(a < m.end() and m.start() < b for (a, b), _ in first)
+        if not overlaps and m.group(1).lower() not in ("hamain", "hamein", "humein", "the", "our", "we", "please", "ab"):
+            named.add(m.group(0))
+    only_venue = next(iter(named)) if len(named) == 1 else None
     for n in sorted(vals):
         v, p = vals[n], pos[n]
         tok = re.match(r"[A-Za-z]+\b|[\d:,.]+\s*(?:am|pm|lakh|lac|k)?", text[p:], re.I)
@@ -139,9 +149,10 @@ def label(text, vals, pos, role):
             out[n] = ("judge_max_teams", "")
         elif re.match(r"\s*judges?\s*(per|for each|har)\s*team", after):
             out[n] = ("judges_per_team", "")
-        elif (re.search(r"\bseats?\s*$|capacity( of| is)?\s*$|accommodates?\s*$|holds?\s*$", before) or
+        elif (re.search(r"(\bseats?|capacity( of| is)?|accommodates?|holds?)\s*(only|just|sirf|bas|about|around|up to|now)?\s*$",
+                        before) or
               re.match(r"\s*(seats|seat capacity|log ki capacity)", after)) and (role == "venue" or "seat" in s):
-            name = _venue_name(re.split(r"[.\n!?]", text[max(0, p - 120):p])[-1])
+            name = only_venue or _venue_name(re.split(r"[.\n!?]", text[max(0, p - 120):p])[-1])
             if name:
                 out[n] = ("venue_seats", name)
                 last_venue = name
@@ -177,4 +188,17 @@ def label(text, vals, pos, role):
                       r"under renovation|out of service)", sent)
         if m:
             extra.append(f"unavailable {m.group(1)}")
+        # a venue DECISION: "shift to Hall B", "move the event to Hall C", "Hall B pay shift karna chahiye"
+        NAME = r"([A-Z][\w'’-]*(?:\s+[A-Z0-9][\w'’-]*)*)"
+        m = re.search(r"\b(?:shift|move|switch|change|relocate|book|use|go with|take)\w*\s+(?:the\s+)?(?:event\s+|venue\s+|hackathon\s+)?"
+                      r"(?:to|into|in|for|ko)?\s*(?:the\s+)?" + NAME, sent) or \
+            re.search(NAME + r"\s+(?:pay|par|pe|mein|main|men|ko|me)\s+(?:shift|move|chal|le|book|rakh|kar|hona|ho)", sent) or \
+            re.search(NAME + r"\s+(?:book|le|rakh|final)\s*(?:kar|karo|karein|lo|lein|kiya|ho)", sent, re.I)
+        if m:
+            name = re.sub(r"(?i)^((the|we|i|our|please|hamain|hamein|humein|hum|ab|now|so|then|let's|lets|kindly)\s+)+",
+                          "", m.group(1).strip())
+            if name and not re.fullmatch(r"(?i)the|we|i|our|it|this|that|please|hamain|hamein|humein", name):
+                extra.append(f"choose {name}")
+        elif only_venue and re.search(r"(?i)\b(shift|move|switch|relocate|go)\w*\s+(there|wahan|wahaan|udhar|us mein|usme|to it)\b", sent):
+            extra.append(f"choose {only_venue}")              # "Hall B ... please shift there"
     return out, extra

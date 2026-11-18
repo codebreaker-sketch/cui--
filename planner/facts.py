@@ -105,6 +105,11 @@ def apply_message(world, msg, tracer, strict):
     w = copy.deepcopy(world)
     problems, areas = [], set()
     mid, role = msg["id"], (msg.get("role") or "other").lower()
+    if strict and msg.get("role_by") == "model" and role != "other":
+        tracer.note("reading", f"message #{mid}: no sender line, so the model's guess '{role}' gives no authority; "
+                    "treated as an unknown sender")
+        role = "other"
+        msg["from"] = "unknown sender"
     date = parse_date(msg.get("date"))
     src = {"msg": mid, "date": date, "from": msg.get("from"), "role": role}
 
@@ -160,6 +165,12 @@ def apply_message(world, msg, tracer, strict):
                 continue
             for fld in ("cap", "price"):
                 if f.get(fld) is not None and _num(f.get(fld)) is not None:
+                    if strict and role not in ("venue", "authority") and cur.get(fld) is not None \
+                            and cur[fld] != _num(f[fld]):
+                        word = "seats" if fld == "cap" else "price Rs"
+                        problems.append(("R-CONFLICT", f"{name}: this message says {word} {_num(f[fld]):,}, but the venue "
+                                         f"itself said {word} {cur[fld]:,} (message #{cur.get('msg')}); "
+                                         f"'{msg.get('from')}' ({role}) cannot change venue facts"))
                     if cur.get(fld) is not None and cur[fld] != _num(f[fld]):
                         tracer.note("venue", f"{name} {fld}: {cur[fld]} -> {_num(f[fld])} (message #{mid})")
                     cur[fld] = _num(f[fld])
@@ -205,7 +216,16 @@ def apply_message(world, msg, tracer, strict):
             areas.add("budget")
         elif t == "need":
             area = f.get("area") if f.get("area") in ("venue", "schedule", "food", "judging", "budget") else "budget"
-            if role in VENDOR_DENY | {"other"} and strict:
+            if f.get("kind") == "use_venue" and role not in ("authority",) and strict:
+                # still applied to this trial copy, so the rejection can also say whether the venue would fit
+                problems.append(("R-AUTH", f"'{msg.get('from') or 'unknown sender'}' ({role}) cannot choose the venue "
+                                 f"('{f.get('what')}'); only someone with authority can"))
+            elif f.get("kind") == "use_venue" and role != "authority":
+                w["notes"].append({"area": "venue", "text": f"{msg.get('from') or 'someone'} ({role}) suggests venue "
+                                   f"'{f.get('what')}': not applied, only authority chooses the venue", **src})
+                areas.add("venue")
+                continue
+            elif role in VENDOR_DENY | {"other"} and strict:
                 problems.append(("R-AUTH", f"'{msg.get('from')}' ({role}) cannot impose a {area} rule"))
                 continue
             need = {"area": area, "kind": f.get("kind") or "other", "what": f.get("what"),

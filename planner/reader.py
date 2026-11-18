@@ -153,7 +153,9 @@ def header(block):
         m = re.match(r"\s*(?:#?\d+[.)]\s*)?(?:\[[^\]]*\]\s*)?([A-Za-z][\w'’ .&()-]{1,40}?)\s*(?::|\bhere\b)", first, re.I)
         if m:
             sender = m.group(1).strip()
-    probe = (sender or first[:60]).lower()
+    # role only from a real sender line; never from the message body ("Hall B pay shift..." is not from the venue)
+    looks_header = bool(date or re.search(r"(?i)\b(from|email|whatsapp|sms|notice|sender)\b", first)) and len(first) < 90
+    probe = (sender or (first[:60] if looks_header else "")).lower()
     role = next((r for r, pat in ROLE_WORDS if re.search(pat, probe)), None)
     return sender, date, role
 
@@ -311,6 +313,8 @@ def parse_one(reply, vals, mid, text="", pos=None):
                     venue(nm)["feat"].append(p[1].lower())
         elif low.startswith("unavailable"):
             venue(line[11:].strip())["avail"] = False
+        elif low.startswith("choose "):
+            cur["f"].append({"t": "need", "area": "venue", "kind": "use_venue", "what": line[7:].strip(), "v": None, "at": None})
         elif low.startswith("require") and len(p) > 1:
             area = "food" if "food" in p[0].lower() else "venue"
             cur["f"].append({"t": "need", "area": area, "kind": "require", "what": p[1].lower(), "v": None, "at": None})
@@ -329,6 +333,7 @@ def parse_one(reply, vals, mid, text="", pos=None):
             cur["f"].remove(short)
     if h_sender:
         cur["from"] = h_sender
+    cur["role_by"] = "code" if h_role else "model"     # a model-guessed role carries no authority in updates
     if h_role:
         cur["role"] = h_role
     if h_date:

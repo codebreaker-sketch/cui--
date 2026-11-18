@@ -93,11 +93,13 @@ const RULES=LANG==='ur'?{
  'R-COVER':'R-COVER: kisi ki di hui tadaad (khana, seats, judges) plan ki zaroorat se kam hai.',
  'R-AUTH':'R-AUTH: bhejne wale ko yeh setting badalne ka ikhtiyar nahi.',
  'R-STALE':'R-STALE: yeh message us fact se purana hai jise badalna chahta hai.',
- 'R-VALID':'R-VALID: isay maanne se 6 checks mein se koi nakaam ho jata.'}:{
+ 'R-VALID':'R-VALID: isay maanne se 6 checks mein se koi nakaam ho jata.',
+ 'R-CONFLICT':'R-CONFLICT: yeh message pehle se maujood fact (maslan venue ki apni batayi seats) se takrata hai.'}:{
  'R-COVER':'R-COVER: a promised quantity (food, seats, judges) is below what the plan needs.',
  'R-AUTH':'R-AUTH: the sender has no authority over this setting.',
  'R-STALE':'R-STALE: the message is older than the fact it tries to replace.',
- 'R-VALID':'R-VALID: accepting it would make one of the 6 checks fail.'};
+ 'R-VALID':'R-VALID: accepting it would make one of the 6 checks fail.',
+ 'R-CONFLICT':'R-CONFLICT: the message contradicts an established fact (e.g. the venue\'s own seat count).'};
 const P = S.plan, fmt = n => n==null?'-':'Rs '+Number(n).toLocaleString('en-PK');
 const esc = s => String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const src = id => id?`<span class="chip">msg #${id}</span>`:'';
@@ -153,7 +155,7 @@ document.getElementById('t-inbox').innerHTML=S.messages.map(m=>{const st=(m.stat
 
 // ---------- REJECTED
 document.getElementById('t-rej').innerHTML=S.rejected.length?S.rejected.map(r=>`<div class="rej"><b class="bad">Message #${r.msg} rejected · rule ${esc(r.rule)}</b>
-<div style="margin:6px 0">“${esc(r.text)}”</div><div><b>Why:</b> ${esc(r.reason)}</div><div class="sub">${esc(RULES[r.rule]||'')}</div><div class="sub">The plan was kept valid; nothing from this message was applied.</div></div>`).join('')
+<div style="margin:6px 0">“${esc(r.text)}”</div><div><b>Why:</b> ${esc(r.reason)}</div>${String(r.rule).split('+').map(x=>`<div class="sub">${esc(RULES[x]||'')}</div>`).join('')}<div class="sub">The plan was kept valid; nothing from this message was applied.</div></div>`).join('')
  :'<div class="card">No messages rejected yet.</div>';
 
 // ---------- TRACE

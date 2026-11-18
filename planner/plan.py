@@ -114,7 +114,14 @@ def build(w):
 
     # ---------- venue candidates
     vreasons, venues = [], []
+    chosen = [n for n in w["needs"] if n["kind"] == "use_venue" and n.get("what")]
+    chosen = chosen[-1] if chosen else None
+    if chosen and not any(_norm(chosen["what"]) == _norm(v["name"]) for v in w["venues"].values()):
+        vreasons.append(f"{chosen['what']} (chosen in message #{chosen['msg']}): no seats/price known for it")
     for v in w["venues"].values():
+        if chosen and _norm(chosen["what"]) != _norm(v["name"]):
+            vreasons.append(f"{v['name']}: not the venue chosen in message #{chosen['msg']}")
+            continue
         if _venue_ok(w, v, people, vreasons):
             venues.append(v)
     venues.sort(key=lambda v: v["price"])

@@ -165,10 +165,17 @@ def update_run(st, blocks, src_name):
         tr.note("reading", f"message #{m['id']} affects areas: {', '.join(sorted(areas)) or 'nothing'} "
                 "(these will be re-validated by code)")
         if problems:
+            # also show what would break if the message were accepted anyway (trial copy only)
+            trial = P.build(new_world)
+            if not trial["valid"]:
+                problems.append(("R-VALID", "and even if accepted, the plan would break -> " + " | ".join(failed(trial))))
             for rule, why in problems:
                 tr.reject(m["id"], rule, why)
-            m["status"], m["reason"] = "rejected", problems[0][1]
-            st["rejected"].append({"msg": m["id"], "rule": problems[0][0], "reason": problems[0][1], "text": m["text"]})
+            tr.note("budget", "plan kept unchanged (still valid)")
+            why = " ; ".join(f"{r}: {y}" for r, y in problems)
+            m["status"], m["reason"] = "rejected", why
+            st["rejected"].append({"msg": m["id"], "rule": "+".join(dict.fromkeys(r for r, _ in problems)),
+                                   "reason": why, "text": m["text"]})
             st["messages"].append(m)
             continue
         cand = P.build(new_world)

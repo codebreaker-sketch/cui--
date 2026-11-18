@@ -67,6 +67,12 @@ messages.txt -> split (code) -> header: sender, date, role (code)
 * **R-AUTH**: the sender has no authority over the setting they are changing (e.g. a student society setting the budget).
 * **R-STALE**: the message is dated earlier than the fact it tries to replace.
 * **R-VALID**: accepting it would make one of the 6 checks fail (too few judges, over budget, venue too small, schedule doesn't fit).
+* **R-CONFLICT**: the message contradicts an established fact. Example: someone who is not the venue says "Hall B has 150 seats" when the venue itself said 200.
+
+A rejection lists **every** rule it breaks, plus what would break if it were accepted anyway. Example:
+"Hamain Hall B pay shift karna chahiyay us main 150 seats hain" → R-CONFLICT (venue said 200) + R-AUTH (unknown sender can't choose the venue) + R-VALID (Hall B: 150 < 177 needed). The plan stays on Hall A.
+Venue decisions ("move the event to Hall C", "Hall C book kar lein") are applied only from someone with authority, and only if the chosen venue passes every check.
+A message with no sender line gets **no authority** in an update: the model's guess of who sent it is never trusted.
 
 Requests ("Can we get a DJ?") are paid for only if someone with budget authority asked; otherwise they are listed as declined, with the reason.
 
