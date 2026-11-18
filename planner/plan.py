@@ -229,7 +229,8 @@ def _schedule(w, judge_block, has_closing_extra):
     hacking = duration - used
     if hacking < 0:
         notes.append(f"activities need {used} min but event is only {duration} min")
-    h1 = _rnd(hacking / 2) if hacking > 0 else 0
+    # one long build block, then meal/breaks (code freeze), then judging; anchors override
+    h1 = hacking if hacking > 0 else 0
     anchored = [m for m in middle if m[3]]
     if anchored:
         target = _hm(anchored[0][3])
@@ -243,7 +244,8 @@ def _schedule(w, judge_block, has_closing_extra):
             else:
                 notes.append(f"could not place '{anchored[0][0]}' at {anchored[0][3]}")
     h2 = max(0, hacking - h1)
-    seq = items + [("Build session 1", h1, "hack", None)] + middle + [("Build session 2", h2, "hack", None)] + tail
+    seq = items + [("Build session" + (" 1" if h2 else ""), h1, "hack", None)] + middle + \
+        [("Build session 2", h2, "hack", None)] + tail
     out, t = [], start
     for name, mins, kind, _ in seq:
         if mins <= 0:
