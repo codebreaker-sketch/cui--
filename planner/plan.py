@@ -132,7 +132,10 @@ def build(w):
     judges_used = hc["judges_needed"]
     judge_cost = judges_used * fee
     spent_total = sum(s["amt"] for s in w["spent"].values())
-    reqs = list(w["reqs"].values())
+    # a wish is only funded if someone with budget authority asked for it; others are listed, not paid for
+    all_reqs = list(w["reqs"].values())
+    reqs = [x for x in all_reqs if x.get("role") in POL.get("request_approvers", ["authority", "finance"])]
+    unapproved = [x for x in all_reqs if x not in reqs]
 
     vs, fs = _surcharge(w, "venue"), _surcharge(w, "food")
     best, considered = None, 0
@@ -169,6 +172,9 @@ def build(w):
         lines.append({"item": f"Approved request: {x['item']}", "amt": x["amt"], "src": x["msg"]})
     declined = [{"item": x["item"], "amt": x["amt"], "src": x["msg"],
                  "why": "does not fit in the budget with essentials first"} for x in reqs if x not in combo]
+    declined += [{"item": x["item"], "amt": x["amt"], "src": x["msg"],
+                  "why": f"only a wish from {x.get('from') or 'someone'} ({x.get('role')}); nobody with budget "
+                         "authority approved it, so it is not paid for"} for x in unapproved]
     if contingency:
         lines.append({"item": f"Contingency reserve {_v(w, 'contingency_pct')}%", "amt": round(contingency), "src": _src(w, "contingency_pct")})
         total += round(contingency)

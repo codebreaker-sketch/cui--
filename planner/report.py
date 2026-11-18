@@ -77,3 +77,36 @@ def write_files(st, out):
         fh.write(tt + "\n")
     with open(os.path.join(out, "final_report.txt"), "w", encoding="utf-8") as fh:
         fh.write(pt + "\n\n\nFULL TRACE (all runs)\n" + tt + "\n")
+
+
+def write_json(st, out):
+    """final_plan.json, execution_trace.json, rejected_messages.json (machine-readable copies)."""
+    import json
+    p = st["plan"]
+    plan = {"valid": p["valid"], "checks": p["checks"], "people": p["people"], "headcount": p["headcount"],
+            "venue": p["venue"], "schedule": p["schedule"], "food": p["food"], "judging": p["judging"],
+            "budget": p["budget"], "constraints": p["needs"], "notes": p["notes"],
+            "facts": {k: v["v"] for k, v in st["world"]["set"].items()}}
+    calls, tin, tout, ttot = [], 0, 0, 0
+    for r in st["runs"]:
+        for e in r["events"]:
+            if e["kind"] != "call":
+                continue
+            u = e["usage"]
+            calls.append({"call_no": e["no"], "run": r["label"], "model": e["model"], "area": e["area"],
+                          "input": e["input"], "output": e["output"], "input_tokens": u.get("prompt"),
+                          "output_tokens": u.get("completion"), "total_tokens": u.get("total"),
+                          "seconds": e["secs"]})
+            tin += u.get("prompt") or 0
+            tout += u.get("completion") or 0
+            ttot += u.get("total") or 0
+    trace = {"calls": calls,
+             "totals": {"model_calls": len(calls), "input_tokens": tin, "output_tokens": tout, "total_tokens": ttot},
+             "runs": [{"label": r["label"], "model_calls": r["calls"], "tokens": r["tokens"], "seconds": r["secs"],
+                       "areas_with_model_calls": r["model_areas"], "areas_predicted": r.get("areas_predicted"),
+                       "areas_replanned": r.get("areas_replanned"),
+                       "code_events": [e for e in r["events"] if e["kind"] != "call"]} for r in st["runs"]]}
+    for name, data in (("final_plan.json", plan), ("execution_trace.json", trace),
+                       ("rejected_messages.json", st["rejected"])):
+        with open(os.path.join(out, name), "w", encoding="utf-8") as fh:
+            json.dump(data, fh, ensure_ascii=False, indent=2)

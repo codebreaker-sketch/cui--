@@ -8,7 +8,14 @@
   "default_team_size": 3,
   "default_judge_min_per_team": 15,
   "default_judging_window_min": 60,
-  "food_tier_preference": ["standard", "premium", "basic"],
-  "optional_requests": "include_if_budget_allows",
-  "slot_round_min": 5
+  "food_tier_preference": [
+    "standard",
+    "premium",
+    "basic"
+  ],
+  "slot_round_min": 5,
+  "request_approvers": [
+    "authority",
+    "finance"
+  ]
 }

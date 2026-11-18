@@ -91,7 +91,7 @@ def apply_message(world, msg, tracer, strict):
     problems, areas = [], set()
     mid, role = msg["id"], (msg.get("role") or "other").lower()
     date = parse_date(msg.get("date"))
-    src = {"msg": mid, "date": date, "from": msg.get("from")}
+    src = {"msg": mid, "date": date, "from": msg.get("from"), "role": role}
 
     def newer_than(existing):
         ed = existing.get("date")

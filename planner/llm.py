@@ -23,9 +23,13 @@ def _load_env(path=".env"):
 
 _load_env()
 
-BASE_URL = os.environ.get("LLM_BASE_URL", "http://localhost:11434/v1").rstrip("/")
-API_KEY = os.environ.get("LLM_API_KEY", "ollama")
-MODEL = os.environ.get("LLM_MODEL", "qwen2.5:1.5b")
+def _env(*names, default=None):
+    return next((os.environ[n] for n in names if os.environ.get(n)), default)
+
+
+BASE_URL = _env("BASE_URL", "LLM_BASE_URL", default="http://localhost:11434/v1").rstrip("/")
+API_KEY = _env("API_KEY", "LLM_API_KEY", default="ollama")
+MODEL = _env("MODEL_NAME", "LLM_MODEL", default="qwen2.5:1.5b")
 TIMEOUT = float(os.environ.get("LLM_TIMEOUT", "90"))
 
 
@@ -33,8 +37,8 @@ class LLMError(RuntimeError):
     pass
 
 
-def chat(system, user, max_tokens=1500):
-    """Returns (text, usage_dict, model_name, seconds)."""
+def chat(system, user, max_tokens=400, deadline=None):
+    """Returns (text, usage_dict, model_name, seconds). `deadline` = time.time() value we must finish by."""
     body = {
         "model": MODEL,
         "temperature": 0,
@@ -48,9 +52,12 @@ def chat(system, user, max_tokens=1500):
     last = None
     for attempt in range(3):
         t0 = time.time()
+        left = TIMEOUT if deadline is None else min(TIMEOUT, deadline - t0)
+        if left < 2:
+            raise LLMError(f"time limit reached before the call could finish ({last or 'no reply yet'})")
         try:
             r = requests.post(f"{BASE_URL}/chat/completions", headers=headers,
-                              data=json.dumps(body), timeout=TIMEOUT)
+                              data=json.dumps(body), timeout=left)
             if r.status_code == 429 or r.status_code >= 500:
                 last = f"HTTP {r.status_code}: {r.text[:200]}"
                 time.sleep(1.5 * (attempt + 1))
