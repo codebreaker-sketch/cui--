@@ -1,0 +1,14 @@
+{
+  "_why": "Our own planning choices (not facts from any message). Change these to change how we plan.",
+  "default_start": "10:00",
+  "opening_min": 15,
+  "lunch_min": 30,
+  "closing_min": 20,
+  "min_hacking_min": 90,
+  "default_team_size": 3,
+  "default_judge_min_per_team": 15,
+  "default_judging_window_min": 60,
+  "food_tier_preference": ["standard", "premium", "basic"],
+  "optional_requests": "include_if_budget_allows",
+  "slot_round_min": 5
+}
