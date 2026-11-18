@@ -22,6 +22,8 @@ Setup: `pip install requests`, then copy `.env.example` to `.env`. Any OpenAI-co
 2. Drop any `.txt` file into the `inbox/` folder, then run `python main.py`. Every file with unseen messages is processed, oldest first.
 3. Web UI (`python server.py`): the "+ New message" tab, where you type a message or upload/drag a `.txt` file. The file is saved into `inbox/` and processed immediately.
 
+**Web UI login:** `python server.py` asks for an email and a 6-digit one-time code (valid 5 min, 5 tries, 8 h session cookie; `planner/auth.py`). It sends real email when `SMTP_HOST/SMTP_USER/SMTP_PASS` are set in `.env`. Without SMTP it runs in demo mode and prints the code in the server terminal. `ALLOWED_EMAILS` limits who can log in; `LOGIN=off` turns login off. The CLI (`python main.py`) never needs a login.
+
 **Languages:** messages may be in English or Roman Urdu (e.g. "students ki tadaad ab 165 hai", "Rs 950 fi kas, sada box Rs 600", "zyada se zyada 3 teams"). The dashboard has an **English / Roman Urdu** button (top right) that switches the interface text, check names and rejection explanations. The trace stays exactly as printed in the terminal.
 
 Outputs (in `out/`): `final_plan.json`, `execution_trace.json`, `rejected_messages.json`,

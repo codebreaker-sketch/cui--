@@ -1,0 +1,30 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sign in · Hackathon Planner</title><style>
+:root{--bg:#f6f3ea;--card:rgba(255,255,255,.8);--ink:#0f2228;--mut:#5b6b70;--line:rgba(15,34,40,.14);--acc:#0f766e;--acc2:#c2410c;--bad:#be123c;--glow:rgba(15,118,110,.2)}
+@media (prefers-color-scheme:dark){:root{--bg:#070d18;--card:rgba(17,28,46,.75);--ink:#e8f1f2;--mut:#93a6b0;--line:rgba(148,197,204,.16);--acc:#2dd4bf;--acc2:#f59e0b;--bad:#fb7185;--glow:rgba(45,212,191,.28)}}
+*{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;padding:16px;color:var(--ink);font:15px/1.5 "Segoe UI",system-ui,sans-serif;
+background:radial-gradient(700px 420px at 15% 10%,var(--glow),transparent 60%),radial-gradient(700px 420px at 90% 90%,color-mix(in srgb,var(--acc2) 22%,transparent),transparent 60%),var(--bg)}
+@keyframes up{from{opacity:0;transform:translateY(18px) scale(.98)}to{opacity:1;transform:none}}@keyframes shine{to{background-position:200% center}}
+.box{width:100%;max-width:400px;background:var(--card);backdrop-filter:blur(16px);border:1px solid var(--line);border-radius:22px;padding:30px 28px;animation:up .6s both;box-shadow:0 30px 60px -30px var(--glow)}
+h1{margin:0 0 4px;font-size:26px;background:linear-gradient(90deg,var(--acc),var(--acc2),var(--acc));background-size:200% auto;-webkit-background-clip:text;background-clip:text;color:transparent;animation:shine 6s linear infinite}
+p{color:var(--mut);margin:0 0 18px}label{font-weight:600;font-size:13px}
+input{width:100%;margin:6px 0 14px;padding:12px 14px;border-radius:12px;border:1px solid var(--line);background:transparent;color:var(--ink);font:inherit;transition:border .2s,box-shadow .2s}
+input:focus{outline:none;border-color:var(--acc);box-shadow:0 0 0 4px var(--glow)}#code{letter-spacing:10px;font-size:22px;text-align:center}
+button{width:100%;padding:12px;border:0;border-radius:12px;font-weight:700;font-size:15px;color:#fff;cursor:pointer;background:linear-gradient(135deg,var(--acc),var(--acc2));transition:transform .15s,opacity .2s}
+button:hover{transform:translateY(-2px)}button:disabled{opacity:.6}.msg{min-height:22px;margin-top:12px;font-size:13px;color:var(--mut)}.err{color:var(--bad)}
+.step{animation:up .45s both}.hide{display:none}.link{background:none;color:var(--acc);width:auto;padding:0;margin-top:10px;font-weight:600}
+</style></head><body><div class="box">
+<h1>Hackathon Planner</h1><p>Sign in with a one-time code sent to your email.</p>
+<div id="s1" class="step"><label>Email</label><input id="email" type="email" placeholder="you@example.com" autocomplete="email"><button id="b1">Send code</button></div>
+<div id="s2" class="step hide"><label>6-digit code</label><input id="code" inputmode="numeric" maxlength="6" placeholder="------"><button id="b2">Verify &amp; enter</button>
+<button class="link" id="back">Use another email</button></div><div id="m" class="msg"></div></div>
+<script>
+const $=id=>document.getElementById(id),say=(t,e)=>{$('m').textContent=t;$('m').className='msg'+(e?' err':'')};
+async function post(u,b){const r=await fetch(u,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)});return [r.ok,await r.json()]}
+$('b1').onclick=async()=>{$('b1').disabled=true;const [ok,j]=await post('/api/otp/send',{email:$('email').value});$('b1').disabled=false;say(j.msg,!ok);
+ if(ok){$('s1').classList.add('hide');$('s2').classList.remove('hide');$('code').focus()}};
+$('b2').onclick=async()=>{$('b2').disabled=true;const [ok,j]=await post('/api/otp/verify',{email:$('email').value,code:$('code').value});$('b2').disabled=false;
+ if(ok){say('Welcome!');location.href='/'}else say(j.msg,true)};
+$('back').onclick=()=>{$('s2').classList.add('hide');$('s1').classList.remove('hide');say('')};
+$('email').onkeydown=e=>{if(e.key==='Enter')$('b1').click()};$('code').onkeydown=e=>{if(e.key==='Enter')$('b2').click()};
+</script></body></html>

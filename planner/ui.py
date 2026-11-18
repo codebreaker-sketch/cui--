@@ -7,36 +7,58 @@ TEMPLATE = r"""<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Hackathon Planner</title>
 <style>
-:root{--bg:#f6f7fb;--card:#fff;--ink:#14162b;--mut:#646a86;--line:#e3e6f0;--acc:#3b5bfd;--ok:#12a150;--bad:#d93848;--warn:#c98a00;--chip:#eef1ff}
-@media (prefers-color-scheme:dark){:root{--bg:#0f1120;--card:#181b30;--ink:#e9ebf8;--mut:#9aa0c0;--line:#2a2e4a;--acc:#7d93ff;--ok:#3fd17f;--bad:#ff6b7a;--warn:#ffc24a;--chip:#232848}}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.5 system-ui,Segoe UI,Roboto,sans-serif}
-header{padding:18px 20px 0;max-width:1200px;margin:auto}h1{margin:0;font-size:22px}
-.sub{color:var(--mut)}.wrap{max-width:1200px;margin:auto;padding:12px 20px 40px}
-.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:14px 0}
-.kpi{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px}.kpi b{display:block;font-size:20px}
-.kpi span{color:var(--mut);font-size:12px}
-nav{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0 14px}nav button{border:1px solid var(--line);background:var(--card);color:var(--ink);
-padding:8px 14px;border-radius:999px;cursor:pointer;font-weight:600}nav button.on{background:var(--acc);color:#fff;border-color:var(--acc)}
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:12px}
-.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 16px}
-.card h3{margin:0 0 8px;font-size:15px;display:flex;justify-content:space-between;align-items:center}
-table{width:100%;border-collapse:collapse}td,th{padding:6px 4px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+:root{--bg:#f6f3ea;--bg2:#efe9db;--card:rgba(255,255,255,.78);--ink:#0f2228;--mut:#5b6b70;--line:rgba(15,34,40,.12);--acc:#0f766e;--acc2:#c2410c;--ok:#15803d;--bad:#be123c;--warn:#b45309;--chip:rgba(15,118,110,.10);--glow:rgba(15,118,110,.18)}
+@media (prefers-color-scheme:dark){:root{--bg:#070d18;--bg2:#0c1626;--card:rgba(17,28,46,.72);--ink:#e8f1f2;--mut:#93a6b0;--line:rgba(148,197,204,.14);--acc:#2dd4bf;--acc2:#f59e0b;--ok:#34d399;--bad:#fb7185;--warn:#fbbf24;--chip:rgba(45,212,191,.12);--glow:rgba(45,212,191,.25)}}
+*{box-sizing:border-box}
+body{margin:0;color:var(--ink);font:14px/1.55 "Segoe UI",system-ui,Roboto,sans-serif;min-height:100vh;
+background:radial-gradient(900px 500px at 10% -10%,var(--glow),transparent 60%),radial-gradient(800px 500px at 100% 0%,color-mix(in srgb,var(--acc2) 18%,transparent),transparent 60%),linear-gradient(180deg,var(--bg),var(--bg2));background-attachment:fixed}
+header{padding:22px 20px 0;max-width:1200px;margin:auto}
+h1{margin:0;font-size:26px;letter-spacing:-.5px;background:linear-gradient(90deg,var(--acc),var(--acc2),var(--acc));background-size:200% auto;-webkit-background-clip:text;background-clip:text;color:transparent;animation:shine 6s linear infinite}
+h1 .sub{-webkit-text-fill-color:var(--mut)}
+@keyframes shine{to{background-position:200% center}}
+@keyframes up{from{opacity:0;transform:translateY(14px) scale(.985)}to{opacity:1;transform:none}}
+@keyframes grow{from{width:0}}
+@keyframes pulse{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--ok) 60%,transparent)}70%{box-shadow:0 0 0 10px transparent}100%{box-shadow:0 0 0 0 transparent}}
+.sub{color:var(--mut)}.wrap{max-width:1200px;margin:auto;padding:12px 20px 48px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin:16px 0}
+.kpi,.card,.msg,.rej,details{backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}
+.kpi{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px 16px;animation:up .55s both;position:relative;overflow:hidden;transition:transform .2s,box-shadow .2s}
+.kpi:hover,.card:hover{transform:translateY(-3px);box-shadow:0 12px 30px -12px var(--glow)}
+.kpi::after{content:"";position:absolute;inset:auto 0 0 0;height:3px;background:linear-gradient(90deg,var(--acc),var(--acc2))}
+.kpi b{display:block;font-size:24px;font-variant-numeric:tabular-nums}.kpi span{color:var(--mut);font-size:12px}
+.dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--ok);margin-right:7px;animation:pulse 2s infinite}
+nav{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 16px}
+nav button{border:1px solid var(--line);background:var(--card);color:var(--ink);padding:9px 16px;border-radius:999px;cursor:pointer;font-weight:600;transition:all .2s}
+nav button:hover{transform:translateY(-2px);border-color:var(--acc)}
+nav button.on{background:linear-gradient(135deg,var(--acc),color-mix(in srgb,var(--acc) 60%,var(--acc2)));color:#fff;border-color:transparent;box-shadow:0 8px 20px -8px var(--glow)}
+section:not(.hide){animation:up .4s both}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:14px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:16px 18px;animation:up .55s both;transition:transform .2s,box-shadow .2s}
+.grid>.card:nth-child(2){animation-delay:.06s}.grid>.card:nth-child(3){animation-delay:.12s}.grid>.card:nth-child(4){animation-delay:.18s}.grid>.card:nth-child(5){animation-delay:.24s}.grid>.card:nth-child(6){animation-delay:.3s}.grid>.card:nth-child(7){animation-delay:.36s}
+.kpi:nth-child(2){animation-delay:.05s}.kpi:nth-child(3){animation-delay:.1s}.kpi:nth-child(4){animation-delay:.15s}.kpi:nth-child(5){animation-delay:.2s}.kpi:nth-child(6){animation-delay:.25s}
+.card h3{margin:0 0 10px;font-size:15px;display:flex;justify-content:space-between;align-items:center;letter-spacing:.2px}
+table{width:100%;border-collapse:collapse}td,th{padding:7px 4px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+tr{transition:background .15s}tr:hover td{background:var(--chip)}
 td.r{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
-.chip{display:inline-block;font-size:11px;padding:2px 8px;border-radius:999px;background:var(--chip);color:var(--acc);font-weight:600;margin:1px}
+.chip{display:inline-block;font-size:11px;padding:2px 9px;border-radius:999px;background:var(--chip);color:var(--acc);font-weight:700;margin:1px}
 .ok{color:var(--ok)}.bad{color:var(--bad)}.warn{color:var(--warn)}
-.st-accepted{background:color-mix(in srgb,var(--ok) 15%,transparent);color:var(--ok)}
-.st-rejected,.st-partly{background:color-mix(in srgb,var(--bad) 15%,transparent);color:var(--bad)}
+.st-accepted{background:color-mix(in srgb,var(--ok) 16%,transparent);color:var(--ok)}
+.st-rejected,.st-partly{background:color-mix(in srgb,var(--bad) 16%,transparent);color:var(--bad)}
 .st-ignored{background:var(--chip);color:var(--mut)}
-.bar{height:10px;background:var(--chip);border-radius:6px;overflow:hidden;margin:8px 0}.bar i{display:block;height:100%;background:var(--acc)}
-.tl{position:relative;margin-top:6px}.slot{display:flex;gap:10px;padding:6px 0;border-bottom:1px dashed var(--line)}
+.bar{height:10px;background:var(--chip);border-radius:6px;overflow:hidden;margin:8px 0}
+.bar i{display:block;height:100%;background:linear-gradient(90deg,var(--acc),var(--acc2));animation:grow 1.1s cubic-bezier(.2,.8,.2,1) both}
+.tl{position:relative;margin-top:6px;padding-left:14px;border-left:2px solid var(--line)}
+.slot{display:flex;gap:10px;padding:7px 0;border-bottom:1px dashed var(--line);position:relative;animation:up .5s both}
+.slot::before{content:"";position:absolute;left:-20px;top:13px;width:10px;height:10px;border-radius:50%;background:var(--acc);box-shadow:0 0 0 3px var(--chip)}
 .slot .t{width:150px;color:var(--mut);font-variant-numeric:tabular-nums}.k-break,.k-meal{color:var(--warn)}.k-judging{color:var(--acc)}
-pre{white-space:pre-wrap;word-break:break-word;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px;max-height:320px;overflow:auto;font-size:12px}
-details{border:1px solid var(--line);border-radius:10px;padding:8px 12px;margin:8px 0;background:var(--card)}summary{cursor:pointer;font-weight:600}
-.msg{border-left:4px solid var(--line);padding:8px 12px;margin:8px 0;background:var(--card);border-radius:8px}
+pre{white-space:pre-wrap;word-break:break-word;background:color-mix(in srgb,var(--bg) 70%,transparent);border:1px solid var(--line);border-radius:10px;padding:10px;max-height:320px;overflow:auto;font-size:12px}
+details{border:1px solid var(--line);border-radius:12px;padding:8px 12px;margin:8px 0;background:var(--card)}summary{cursor:pointer;font-weight:600}
+.msg{border-left:4px solid var(--line);padding:10px 14px;margin:10px 0;background:var(--card);border-radius:12px;animation:up .45s both}
 .msg.rejected,.msg.partly{border-left-color:var(--bad)}.msg.accepted{border-left-color:var(--ok)}
 .codeev{color:var(--mut);font-family:ui-monospace,Consolas,monospace;font-size:12px;padding:2px 0}
-.rej{border:1px solid var(--bad);border-radius:12px;padding:12px;margin:10px 0;background:color-mix(in srgb,var(--bad) 7%,var(--card))}
+.rej{border:1px solid color-mix(in srgb,var(--bad) 50%,transparent);border-radius:14px;padding:14px;margin:12px 0;background:color-mix(in srgb,var(--bad) 8%,var(--card));animation:up .45s both}
 .hide{display:none}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style></head><body>
 <header style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap"><h1>Hackathon Planner <span class="sub" style="font-size:14px">· reads the messages, plans the event, explains every decision</span></h1>
 <button id="lang" title="Language / Zubaan" style="border:1px solid var(--line);background:var(--card);color:var(--ink);padding:7px 14px;border-radius:999px;cursor:pointer;font-weight:600">Roman Urdu</button></header>
@@ -112,7 +134,7 @@ document.getElementById('nav').innerHTML=tabs.map(([k,l])=>`<button data-t="${k}
 const b=P.budget, pct=b.limit?Math.min(100,Math.round(b.total/b.limit*100)):0;
 const okN=P.checks.filter(c=>c.ok).length;
 document.getElementById('kpis').innerHTML=[
- [P.valid?'<span class="ok">VALID</span>':'<span class="bad">INVALID</span>', okN+'/'+P.checks.length+' checks pass'],
+ [P.valid?'<span class="ok"><i class="dot"></i>VALID</span>':'<span class="bad">INVALID</span>', okN+'/'+P.checks.length+' checks pass'],
  [P.people,'people to seat & feed'],[fmt(b.total),'of '+fmt(b.limit)+' ('+pct+'%)'],[fmt(b.left),'left in budget'],
  [S.rejected.length,'messages rejected'],[S.tokens_total.toLocaleString(),'tokens, all runs']
 ].map(([v,l])=>`<div class="kpi"><b>${v}</b><span>${l}</span></div>`).join('');
@@ -199,6 +221,11 @@ function translate(root){if(LANG!=='ur')return;const w=document.createTreeWalker
 document.getElementById('lang').textContent=LANG==='ur'?'English':'Roman Urdu';
 document.getElementById('lang').onclick=()=>{try{localStorage.setItem('lang',LANG==='ur'?'en':'ur')}catch(e){}location.reload()};
 translate(document.body);
+// count-up animation for the numbers in the KPI tiles
+document.querySelectorAll('.kpi b').forEach(el=>{const txt=el.textContent,m=txt.match(/[\d,]+/);if(!m||el.querySelector('.dot'))return;
+ const end=Number(m[0].replace(/,/g,''));if(!end)return;const t0=performance.now(),dur=900;
+ const step=t=>{const k=Math.min(1,(t-t0)/dur),v=Math.round(end*(1-Math.pow(1-k,3)));el.textContent=txt.replace(m[0],v.toLocaleString('en-PK'));if(k<1)requestAnimationFrame(step)};
+ requestAnimationFrame(step)});
 if(!served)setTimeout(()=>location.reload(),8000);
 </script></body></html>"""
 
