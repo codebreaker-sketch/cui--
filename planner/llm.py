@@ -39,7 +39,6 @@ def chat(system, user, max_tokens=1500):
         "model": MODEL,
         "temperature": 0,
         "max_tokens": max_tokens,
-        "response_format": {"type": "json_object"},
         "messages": [
             {"role": "system", "content": system},
             {"role": "user", "content": user},
