@@ -105,13 +105,14 @@ def apply_message(world, msg, tracer, strict):
     w = copy.deepcopy(world)
     problems, areas = [], set()
     mid, role = msg["id"], (msg.get("role") or "other").lower()
-    if strict and msg.get("role_by") == "model" and role != "other":
-        tracer.note("reading", f"message #{mid}: no sender line, so the model's guess '{role}' gives no authority; "
-                    "treated as an unknown sender")
-        role = "other"
+    unknown = strict and msg.get("role_by") == "model"
+    if unknown:
+        # sender is optional: an update with no sender line is judged only on validity (the 6 checks + R-COVER)
+        tracer.note("reading", f"message #{mid}: no sender line; sender is not checked, only whether the plan stays valid")
+        role = "authority"
         msg["from"] = "unknown sender"
     date = parse_date(msg.get("date"))
-    src = {"msg": mid, "date": date, "from": msg.get("from"), "role": role}
+    src = {"msg": mid, "date": date, "from": msg.get("from"), "role": "other" if unknown else role}
 
     def newer_than(existing):
         ed = existing.get("date")

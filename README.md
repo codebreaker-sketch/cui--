@@ -70,9 +70,9 @@ messages.txt -> split (code) -> header: sender, date, role (code)
 * **R-CONFLICT**: the message contradicts an established fact. Example: someone who is not the venue says "Hall B has 150 seats" when the venue itself said 200.
 
 A rejection lists **every** rule it breaks, plus what would break if it were accepted anyway. Example:
-"Hamain Hall B pay shift karna chahiyay us main 150 seats hain" → R-CONFLICT (venue said 200) + R-AUTH (unknown sender can't choose the venue) + R-VALID (Hall B: 150 < 177 needed). The plan stays on Hall A.
+"Hamain Hall B pay shift karna chahiyay us main 150 seats hain" → R-VALID (Hall B: 150 < 177 needed). The plan stays on Hall A.
 Venue decisions ("move the event to Hall C", "Hall C book kar lein") are applied only from someone with authority, and only if the chosen venue passes every check.
-A message with no sender line gets **no authority** in an update: the model's guess of who sent it is never trusted.
+The sender is **optional**. An update with no sender line is judged only on validity (the 6 checks and R-COVER), never on who sent it. When a sender line is present, R-AUTH / R-CONFLICT still apply (e.g. a student society cannot set the budget).
 
 Requests ("Can we get a DJ?") are paid for only if someone with budget authority asked; otherwise they are listed as declined, with the reason.
 
