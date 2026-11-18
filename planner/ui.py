@@ -1,232 +1,291 @@
-"""Writes out/index.html: a self-contained dashboard (no server, no internet needed).
-Tabs: Plan | Inbox (every message + status) | Rejected | Trace | Runs (tokens, areas)."""
-import html
+"""Writes out/index.html: a self-contained dashboard built ONLY from the saved state (real plan, real trace).
+Sections: plan rows for the 5 areas, schedule bar, ticket (status, cost, calls, tokens), budget bar, six checks,
+tabs for Trace / Rejected / Message pack / Runs & tokens / Constraints, and (when served by server.py)
+a box to type or upload new messages. English / Roman Urdu switch."""
 import json
 
-TEMPLATE = r"""<!doctype html><html lang="en"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+TEMPLATE = r"""<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Hackathon Planner</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
 <style>
-:root{--bg:#f6f3ea;--bg2:#efe9db;--card:rgba(255,255,255,.78);--ink:#0f2228;--mut:#5b6b70;--line:rgba(15,34,40,.12);--acc:#0f766e;--acc2:#c2410c;--ok:#15803d;--bad:#be123c;--warn:#b45309;--chip:rgba(15,118,110,.10);--glow:rgba(15,118,110,.18)}
-@media (prefers-color-scheme:dark){:root{--bg:#070d18;--bg2:#0c1626;--card:rgba(17,28,46,.72);--ink:#e8f1f2;--mut:#93a6b0;--line:rgba(148,197,204,.14);--acc:#2dd4bf;--acc2:#f59e0b;--ok:#34d399;--bad:#fb7185;--warn:#fbbf24;--chip:rgba(45,212,191,.12);--glow:rgba(45,212,191,.25)}}
-*{box-sizing:border-box}
-body{margin:0;color:var(--ink);font:14px/1.55 "Segoe UI",system-ui,Roboto,sans-serif;min-height:100vh;
-background:radial-gradient(900px 500px at 10% -10%,var(--glow),transparent 60%),radial-gradient(800px 500px at 100% 0%,color-mix(in srgb,var(--acc2) 18%,transparent),transparent 60%),linear-gradient(180deg,var(--bg),var(--bg2));background-attachment:fixed}
-header{padding:22px 20px 0;max-width:1200px;margin:auto}
-h1{margin:0;font-size:26px;letter-spacing:-.5px;background:linear-gradient(90deg,var(--acc),var(--acc2),var(--acc));background-size:200% auto;-webkit-background-clip:text;background-clip:text;color:transparent;animation:shine 6s linear infinite}
-h1 .sub{-webkit-text-fill-color:var(--mut)}
-@keyframes shine{to{background-position:200% center}}
-@keyframes up{from{opacity:0;transform:translateY(14px) scale(.985)}to{opacity:1;transform:none}}
-@keyframes grow{from{width:0}}
-@keyframes pulse{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--ok) 60%,transparent)}70%{box-shadow:0 0 0 10px transparent}100%{box-shadow:0 0 0 0 transparent}}
-.sub{color:var(--mut)}.wrap{max-width:1200px;margin:auto;padding:12px 20px 48px}
-.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin:16px 0}
-.kpi,.card,.msg,.rej,details{backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}
-.kpi{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px 16px;animation:up .55s both;position:relative;overflow:hidden;transition:transform .2s,box-shadow .2s}
-.kpi:hover,.card:hover{transform:translateY(-3px);box-shadow:0 12px 30px -12px var(--glow)}
-.kpi::after{content:"";position:absolute;inset:auto 0 0 0;height:3px;background:linear-gradient(90deg,var(--acc),var(--acc2))}
-.kpi b{display:block;font-size:24px;font-variant-numeric:tabular-nums}.kpi span{color:var(--mut);font-size:12px}
-.dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--ok);margin-right:7px;animation:pulse 2s infinite}
-nav{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 16px}
-nav button{border:1px solid var(--line);background:var(--card);color:var(--ink);padding:9px 16px;border-radius:999px;cursor:pointer;font-weight:600;transition:all .2s}
-nav button:hover{transform:translateY(-2px);border-color:var(--acc)}
-nav button.on{background:linear-gradient(135deg,var(--acc),color-mix(in srgb,var(--acc) 60%,var(--acc2)));color:#fff;border-color:transparent;box-shadow:0 8px 20px -8px var(--glow)}
-section:not(.hide){animation:up .4s both}
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:14px}
-.card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:16px 18px;animation:up .55s both;transition:transform .2s,box-shadow .2s}
-.grid>.card:nth-child(2){animation-delay:.06s}.grid>.card:nth-child(3){animation-delay:.12s}.grid>.card:nth-child(4){animation-delay:.18s}.grid>.card:nth-child(5){animation-delay:.24s}.grid>.card:nth-child(6){animation-delay:.3s}.grid>.card:nth-child(7){animation-delay:.36s}
-.kpi:nth-child(2){animation-delay:.05s}.kpi:nth-child(3){animation-delay:.1s}.kpi:nth-child(4){animation-delay:.15s}.kpi:nth-child(5){animation-delay:.2s}.kpi:nth-child(6){animation-delay:.25s}
-.card h3{margin:0 0 10px;font-size:15px;display:flex;justify-content:space-between;align-items:center;letter-spacing:.2px}
-table{width:100%;border-collapse:collapse}td,th{padding:7px 4px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
-tr{transition:background .15s}tr:hover td{background:var(--chip)}
-td.r{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
-.chip{display:inline-block;font-size:11px;padding:2px 9px;border-radius:999px;background:var(--chip);color:var(--acc);font-weight:700;margin:1px}
-.ok{color:var(--ok)}.bad{color:var(--bad)}.warn{color:var(--warn)}
-.st-accepted{background:color-mix(in srgb,var(--ok) 16%,transparent);color:var(--ok)}
-.st-rejected,.st-partly{background:color-mix(in srgb,var(--bad) 16%,transparent);color:var(--bad)}
-.st-ignored{background:var(--chip);color:var(--mut)}
-.bar{height:10px;background:var(--chip);border-radius:6px;overflow:hidden;margin:8px 0}
-.bar i{display:block;height:100%;background:linear-gradient(90deg,var(--acc),var(--acc2));animation:grow 1.1s cubic-bezier(.2,.8,.2,1) both}
-.tl{position:relative;margin-top:6px;padding-left:14px;border-left:2px solid var(--line)}
-.slot{display:flex;gap:10px;padding:7px 0;border-bottom:1px dashed var(--line);position:relative;animation:up .5s both}
-.slot::before{content:"";position:absolute;left:-20px;top:13px;width:10px;height:10px;border-radius:50%;background:var(--acc);box-shadow:0 0 0 3px var(--chip)}
-.slot .t{width:150px;color:var(--mut);font-variant-numeric:tabular-nums}.k-break,.k-meal{color:var(--warn)}.k-judging{color:var(--acc)}
-pre{white-space:pre-wrap;word-break:break-word;background:color-mix(in srgb,var(--bg) 70%,transparent);border:1px solid var(--line);border-radius:10px;padding:10px;max-height:320px;overflow:auto;font-size:12px}
-details{border:1px solid var(--line);border-radius:12px;padding:8px 12px;margin:8px 0;background:var(--card)}summary{cursor:pointer;font-weight:600}
-.msg{border-left:4px solid var(--line);padding:10px 14px;margin:10px 0;background:var(--card);border-radius:12px;animation:up .45s both}
-.msg.rejected,.msg.partly{border-left-color:var(--bad)}.msg.accepted{border-left-color:var(--ok)}
-.codeev{color:var(--mut);font-family:ui-monospace,Consolas,monospace;font-size:12px;padding:2px 0}
-.rej{border:1px solid color-mix(in srgb,var(--bad) 50%,transparent);border-radius:14px;padding:14px;margin:12px 0;background:color-mix(in srgb,var(--bad) 8%,var(--card));animation:up .45s both}
-.hide{display:none}
-@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
-</style></head><body>
-<header style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap"><h1>Hackathon Planner <span class="sub" style="font-size:14px">· reads the messages, plans the event, explains every decision</span></h1>
-<button id="lang" title="Language / Zubaan" style="border:1px solid var(--line);background:var(--card);color:var(--ink);padding:7px 14px;border-radius:999px;cursor:pointer;font-weight:600">Roman Urdu</button></header>
+:root{color-scheme:dark;--glass:rgba(22,22,28,.72);--line:rgba(255,255,255,.09);--txt:#f4f4f7;--mut:#9a9aa8;--pur:#7c3aed;--pur2:#a78bfa;--ok:#34d399;--warn:#fbbf24;--bad:#f87171;--r:18px;--card:rgba(22,22,28,.85)}
+*,*::before,*::after{box-sizing:border-box}
+body{margin:0;background:#050507;color:var(--txt);font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;font-size:14px;min-height:100vh;overflow-x:hidden}
+.bg{position:fixed;inset:0;z-index:0;pointer-events:none;background:radial-gradient(55% 45% at 88% 15%,rgba(124,58,237,.6),transparent 70%),radial-gradient(50% 40% at 5% 100%,rgba(91,33,182,.55),transparent 70%),repeating-linear-gradient(118deg,rgba(167,139,250,.2) 0 1px,transparent 1px 9px);animation:drift 14s ease-in-out infinite alternate}
+@keyframes drift{to{background-position:0 0,30px -20px,60px 0}}
+.wrap{position:relative;z-index:1;max-width:1120px;margin:0 auto;padding:16px}
+header{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:16px}
+.logo{font-weight:800;font-size:18px;letter-spacing:-.3px}.logo i{font-style:normal;color:var(--pur2)}
+.pill{background:rgba(255,255,255,.07);border:1px solid var(--line);color:var(--txt);border-radius:10px;padding:8px 14px;font:inherit;font-size:13px;cursor:pointer;transition:background .2s;text-decoration:none}
+.pill:hover{background:rgba(255,255,255,.14)}
+.shell{background:var(--glass);border:1px solid var(--line);border-radius:28px;padding:18px;backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);box-shadow:0 30px 80px rgba(0,0,0,.5)}
+.main{display:grid;grid-template-columns:1.05fr 1fr;gap:18px}
+@media(max-width:820px){.main{grid-template-columns:1fr}}
+h1{font-size:34px;line-height:1.1;margin:6px 0 12px;letter-spacing:-.8px;font-weight:700}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px}
+.chip{background:rgba(255,255,255,.07);border:1px solid var(--line);border-radius:999px;padding:5px 11px;font-size:12px;color:var(--mut)}
+.chip b{color:var(--txt);font-weight:600}
+.box{background:rgba(255,255,255,.05);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+.row{display:flex;align-items:center;gap:12px;padding:12px 14px;border-bottom:1px solid var(--line);animation:down .4s both}
+.row:last-child{border-bottom:0}
+.row .ic{width:34px;height:34px;border-radius:10px;background:rgba(124,58,237,.2);display:grid;place-items:center;font-size:16px;flex:none}
+.row .nm{font-weight:600}.row .vl{color:var(--mut);font-size:13px;margin-top:2px}.row .body{flex:1;min-width:0}
+.dot{width:10px;height:10px;border-radius:50%;background:#555;flex:none}
+.dot.ok{background:var(--ok);box-shadow:0 0 0 4px rgba(52,211,153,.18)}.dot.bad{background:var(--bad);animation:pulse 1s infinite}
+@keyframes pulse{50%{box-shadow:0 0 0 6px rgba(248,113,113,.25)}}
+.label{font-size:12px;color:var(--mut);margin:14px 0 6px}
+.tl{display:flex;gap:3px;height:34px}
+.tl div{border-radius:8px;font-size:10px;display:grid;place-items:center;overflow:hidden;white-space:nowrap;color:#0a0a0f;font-weight:600;transform-origin:left;animation:grow .5s both}
+@keyframes grow{from{transform:scaleX(0);opacity:0}}
+.tlkey{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:11px;color:var(--mut);margin-top:6px}
+.stage{background:#000;border-radius:var(--r);padding:22px;border:1px solid var(--line)}
+.ticket{aspect-ratio:16/10;min-height:190px;border-radius:16px;padding:18px 22px;color:#0a0a0f;position:relative;display:flex;flex-direction:column;justify-content:space-between;
+background:linear-gradient(115deg,#9fd8ff,#c9a7ff,#ffb3e6,#ffe08a,#9dffc8,#9fd8ff);background-size:300% 300%;animation:holo 9s linear infinite;
+-webkit-mask:radial-gradient(circle 13px at 0 50%,#0000 98%,#000) left/51% 100% no-repeat,radial-gradient(circle 13px at 100% 50%,#0000 98%,#000) right/51% 100% no-repeat;
+mask:radial-gradient(circle 13px at 0 50%,#0000 98%,#000) left/51% 100% no-repeat,radial-gradient(circle 13px at 100% 50%,#0000 98%,#000) right/51% 100% no-repeat}
+.ticket.badt{background:linear-gradient(115deg,#ffb4b4,#ffd6a5,#ffb4b4);background-size:300% 300%}
+@keyframes holo{to{background-position:300% 0}}
+.ticket small{font-weight:700;letter-spacing:.12em;font-size:10px}
+.ticket h2{margin:4px 0 0;font-size:30px;line-height:1;font-weight:800;letter-spacing:-.5px;text-transform:uppercase}
+.tstats{display:flex;gap:14px;align-items:flex-end;justify-content:space-between;flex-wrap:wrap}
+.tstats div span{display:block;font-size:10px;font-weight:700;letter-spacing:.08em;opacity:.7}
+.tstats div b{font-size:17px;font-variant-numeric:tabular-nums}
+.bars{height:26px;width:70px;background:repeating-linear-gradient(90deg,#0a0a0f 0 2px,transparent 2px 4px,#0a0a0f 4px 5px,transparent 5px 8px)}
+.seg{display:flex;height:14px;border-radius:8px;overflow:hidden;gap:2px;background:rgba(255,255,255,.06)}
+.seg i{display:block;animation:grow .8s both}
+.legend{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:8px;font-size:12px;color:var(--mut)}
+.legend s{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px;text-decoration:none}
+.checks{display:grid;grid-template-columns:1fr 1fr;gap:6px 14px;font-size:13px}
+.checks div{display:flex;gap:8px;align-items:center;color:var(--mut)}
+.checks div.on{color:var(--txt)}.checks div.on::before{content:"✓";color:var(--ok);font-weight:700}.checks div.off{color:var(--bad)}.checks div.off::before{content:"✗";font-weight:700}
+.alert{margin-top:12px;padding:11px 14px;border-radius:12px;background:rgba(248,113,113,.14);border:1px solid rgba(248,113,113,.4);font-size:13px;animation:down .35s,shake .4s .35s}
+@keyframes down{from{opacity:0;transform:translateY(-8px)}}
+@keyframes shake{25%{transform:translateX(-4px)}75%{transform:translateX(4px)}}
+.bottom{margin-top:18px}
+.tabs{display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap}
+.tab{background:transparent;border:1px solid var(--line);color:var(--mut);padding:8px 14px;border-radius:999px;font:inherit;cursor:pointer}
+.tab.on{background:#fff;color:#0a0a0f;font-weight:600;border-color:#fff}
+.panel{display:none}.panel.on{display:block}
+.call{padding:12px 14px;border-bottom:1px solid var(--line);animation:down .35s both}.call:last-child{border-bottom:0}
+.call .top{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.num{background:var(--pur);border-radius:8px;padding:2px 8px;font-weight:700;font-size:12px}
+.tag{background:rgba(167,139,250,.2);color:var(--pur2);border-radius:6px;padding:2px 8px;font-size:12px}
+.tag.code{background:rgba(255,255,255,.08);color:var(--mut)}.tag.rej{background:rgba(248,113,113,.18);color:var(--bad)}
+.tok{margin-left:auto;color:var(--mut);font-size:12px;font-variant-numeric:tabular-nums}
+.runh{padding:12px 14px;background:rgba(124,58,237,.12);font-weight:700;display:flex;gap:10px;flex-wrap:wrap;justify-content:space-between}
+.codeev{font:12px/1.5 ui-monospace,Menlo,Consolas,monospace;color:var(--mut);padding:3px 14px}
+.codeev.bad{color:#ffb4b4}
+details{margin-top:6px;color:var(--mut)}summary{cursor:pointer;font-size:12px}
+pre{white-space:pre-wrap;word-break:break-word;margin:6px 0 0;font:12px/1.5 ui-monospace,Menlo,Consolas,monospace;color:#d7d7e0;background:rgba(0,0,0,.35);padding:10px;border-radius:10px;max-height:340px;overflow:auto}
+.total{padding:14px;font-weight:700;display:flex;justify-content:space-between;background:rgba(124,58,237,.18)}
+.total span{font-variant-numeric:tabular-nums}
+.msg{padding:12px 14px;border-bottom:1px solid var(--line);display:flex;gap:12px;align-items:flex-start;animation:down .35s both}
+.msg:last-child{border-bottom:0}.msg .meta{font-size:12px;color:var(--mut)}
+.stamp{margin-left:auto;flex:none;font-size:11px;font-weight:700;border:2px solid;border-radius:6px;padding:2px 8px;transform:rotate(-4deg);text-transform:uppercase;letter-spacing:.05em}
+.stamp.used{color:var(--ok)}.stamp.stale{color:var(--warn)}.stamp.rej{color:var(--bad)}.stamp.irr{color:var(--mut)}
+.reason{font-size:12px;color:#ffb4b4;margin-top:3px}.why2{font-size:12px;color:var(--mut);margin-top:3px}
+table{width:100%;border-collapse:collapse}td,th{padding:9px 12px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top;font-size:13px}
+th{color:var(--mut);font-weight:600}td.r,th.r{text-align:right;font-variant-numeric:tabular-nums}
+.compose{display:flex;gap:10px;margin-top:14px;flex-wrap:wrap}
+.compose textarea{flex:1;min-width:220px;min-height:46px;resize:vertical;background:rgba(255,255,255,.06);border:1px dashed rgba(255,255,255,.25);border-radius:12px;color:var(--txt);padding:10px 12px;font:inherit;transition:border-color .2s,transform .2s}
+.compose textarea:focus{outline:0;border-color:var(--pur2);transform:scale(1.005)}
+.drop{margin-top:10px;border:1px dashed rgba(255,255,255,.25);border-radius:12px;padding:12px;text-align:center;color:var(--mut);font-size:13px;transition:border-color .2s,background .2s}
+.drop.over{border-color:var(--pur2);background:rgba(167,139,250,.1)}
+.slip{font-size:12px;color:var(--mut);margin-top:8px}
+.ex{font-size:12px;color:var(--pur2);cursor:pointer;text-decoration:underline;margin-right:10px;background:none;border:0;font-family:inherit;padding:0}
+.note{font-size:11px;color:var(--mut);text-align:center;margin-top:14px}
+.hide{display:none!important}
+@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style></head>
+<body><div class="bg"></div>
 <div class="wrap">
-<div class="kpis" id="kpis"></div>
-<nav id="nav"></nav>
-<section id="t-plan"></section><section id="t-inbox" class="hide"></section><section id="t-rej" class="hide"></section>
-<section id="t-trace" class="hide"></section><section id="t-runs" class="hide"></section><section id="t-new" class="hide"></section>
+<header><div class="logo">Event<i>Planner</i> · Islamabad</div>
+<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="pill" id="lang">Roman Urdu</button><button class="pill" id="copy">Copy plan + trace</button></div></header>
+<div class="shell">
+ <div class="main">
+  <section>
+   <h1>Hackathon plan</h1>
+   <div class="chips" id="chips"></div>
+   <div class="box" id="rows"></div>
+   <div class="label">Schedule</div>
+   <div class="tl" id="tl"></div><div class="tlkey" id="tlkey"></div>
+   <div id="alert"></div>
+  </section>
+  <section>
+   <div class="stage"><div class="ticket" id="ticket">
+     <div><small id="tk-sub"></small><h2 id="tk-title"></h2></div>
+     <div class="tstats"><div><span>TOTAL COST</span><b id="tk-cost">0</b></div><div><span>MODEL CALLS</span><b id="tk-calls">0</b></div>
+     <div><span>TOKENS</span><b id="tk-tok">0</b></div><div class="bars"></div></div></div></div>
+   <div class="label">Budget</div><div class="seg" id="seg"></div><div class="legend" id="legend"></div>
+   <div class="label">Six checks</div><div class="checks" id="checks"></div>
+  </section>
+ </div>
+ <div class="bottom">
+  <div class="tabs" id="tabs"></div>
+  <div class="panel box" id="p-trace"></div>
+  <div class="panel box" id="p-rej"></div>
+  <div class="panel box" id="p-inbox"></div>
+  <div class="panel box" id="p-runs"></div>
+  <div class="panel box" id="p-cons"></div>
+  <div id="composer" class="hide">
+   <div class="compose"><textarea id="newmsg" placeholder="Paste a new message here (email, WhatsApp, notice)…"></textarea>
+   <button class="pill" id="send" style="min-width:110px">Update plan</button></div>
+   <div class="drop" id="drop">Drop a .txt file here, or <input type="file" id="nf" accept=".txt,text/plain"> · a whole pack starts a fresh plan; new message(s) update it</div>
+   <div style="margin-top:8px"><span class="slip">Examples:</span> <button class="ex" data-t="Finance here. The printing bill came in at Rs 15,000, not Rs 10,000.">a change</button><button class="ex" data-t="Caterer: I have rounded your order down to 100 boxes to keep the cost low.">a wrong message</button></div>
+   <pre id="out" class="hide"></pre>
+  </div>
+  <div class="slip" id="slip"></div>
+ </div>
+</div>
+<p class="note" id="foot">Everything on this page comes from the saved plan and trace (out/final_plan.json, out/execution_trace.json).</p>
 </div>
 <script>
-const S = __DATA__;
+const S=__DATA__;
 let LANG='en';try{LANG=localStorage.getItem('lang')||'en'}catch(e){}
 const UR={
- 'reads the messages, plans the event, explains every decision':'messages parhta hai, event plan karta hai, har faisla samjhata hai',
- 'Hackathon Planner':'Hackathon Planner','Runs & tokens':'Runs aur tokens','+ New message':'+ Naya message','Inbox':'Inbox',
- 'Rejected':'Rad shuda','Trace':'Trace','Plan':'Plan','checks pass':'checks pass','people to seat & feed':'logon ko bithana aur khilana',
- 'left in budget':'budget mein baqi','messages rejected':'messages rad kiye','tokens, all runs':'tokens, tamam runs','INVALID':'GHALAT','VALID':'DURUST',
- 'Constraints & decisions in force':'Laagu shartein aur faislay','Other constraints noted':'Doosri shartein (note ki gayi)',
- 'Checks':'Checks','Venue':'Jagah (Venue)','Food':'Khana','Judging':'Judging','Schedule':'Schedule','Budget':'Budget',
- 'Correct figures':'Figures durust','Within budget':'Budget ke andar','Venue fits':'Jagah kaafi hai','Schedule valid':'Schedule durust',
- 'Enough judges':'Judges kaafi hain','All areas covered':'Tamam areas shamil','PASS':'THEEK','FAIL':'NAKAAM',
- 'seats for':'seats, logon ke liye:','people':'log','full':'bhara hua','Why not the others':'Baqi kyun nahi','No valid venue':'Koi durust jagah nahi',
- 'per head':'fi kas','alternative':'mutabadil','students':'students','judges':'judges','staff':'staff','teams each':'teams har judge',
- 'judging block':'judging block','confirmed':'confirmed','on standby':'standby par','cover for late/absent judges':'late/ghair hazir judges ki jagah',
- 'Total':'Kul','Left':'Baqi','Declined':'Mana kiya','out of date':'purana (out of date)','replaced by':'ki jagah aya',
- 'Message #':'Message #','rejected · rule':'rad kiya gaya · rule','Why:':'Wajah:',
- 'The plan was kept valid; nothing from this message was applied.':'Plan durust rakha gaya; is message ki koi cheez laagu nahi ki gayi.',
- 'No messages rejected yet.':'Abhi tak koi message rad nahi hua.','facts extracted':'nikaale gaye facts',
- 'accepted':'qabool','partly rejected':'jazvi rad','rejected':'rad','ignored':'nazar andaz','not read':'parha nahi gaya',
- 'model call(s)':'model call(s)','Raw printed trace':'Asal printed trace','Input':'Input','Output':'Output',
- 'Run':'Run','Model calls':'Model calls','Areas that called a model':'Jin areas ne model call kiya','Predicted (before run)':'Pesh-goi (run se pehle)',
- 'Areas re-planned (code)':'Dobara plan hue areas (code)','Tokens':'Tokens','Time':'Waqt','none':'koi nahi',
- 'Only the reading step uses a model. Venue, schedule, food, judging and budget are pure code, so a new message costs one small model call and re-plans only the areas whose numbers changed.':
- 'Sirf reading step model use karta hai. Venue, schedule, khana, judging aur budget sirf code hain, is liye naya message sirf aik chhoti model call leta hai aur sirf wohi areas dobara plan hote hain jin ke numbers badle.',
- 'Submit a new message':'Naya message bhejein',
- "Goes through the same pipeline as":'Wohi pipeline jo',
- "one 'reading' model call per message, then code re-plans and validates. A message that would break the plan is rejected and the plan is kept.":
- "har message par aik 'reading' model call, phir code plan aur validation karta hai. Jo message plan tor de woh rad hota hai aur plan wesa hi rehta hai.",
- 'Run update':'Update chalayein','Upload a .txt file':'.txt file upload karein',
- 'A whole pack starts a fresh plan; a file with new message(s) is an update. Drag the file here or':'Poora pack naya plan banata hai; naye message(s) wali file update hai. File yahan drag karein ya',
- 'Files:':'Files:','running (max 120 s)...':'chal raha hai (zyada se zyada 120 s)...','done · reload dashboard':'mukammal · dashboard reload karein',
- 'e.g. Finance here. The printing bill came in at Rs 15,000, not Rs 10,000.':'maslan: Finance here. Printing ka bill Rs 15,000 aya, Rs 10,000 nahi.',
- 'Opening & briefing':'Aaghaz aur briefing','Build session':'Build session','Lunch':'Lunch','Closing & prizes':'Ikhtitaam aur inamaat',
- 'Judging (teams at tables, judges rotate)':'Judging (teams tables par, judges ghoomtay hain)','min':'min',
- 'Already spent':'Pehle se kharch','Judge honorarium':'Judges ka honorarium','Approved request':'Manzoor shuda request',
- 'Contingency reserve':'Hangami reserve','lacks required':'mein zaroori cheez nahi:','not available':'dastiyab nahi','needed':'chahiye',
+ 'Hackathon plan':'Hackathon ka plan','Schedule':'Schedule','Budget':'Budget','Six checks':'Chhe checks','TOTAL COST':'KUL KHARCHA','MODEL CALLS':'MODEL CALLS','TOKENS':'TOKENS',
+ 'ALL SIX CHECKS PASSED':'CHHE KE CHHE CHECKS PASS','SOME CHECKS FAIL':'KUCH CHECKS FAIL','The plan is valid':'Plan durust hai','The plan needs work':'Plan mein masla hai',
+ 'Copy plan + trace':'Plan + trace copy karein','Copied':'Copy ho gaya','Trace':'Trace','Rejected messages':'Rad kiye gaye messages','Message pack':'Messages',
+ 'Runs & tokens':'Runs aur tokens','Constraints':'Shartein','Students':'Students','Teams':'Teams','Staff':'Staff','Judges':'Judges','Extra':'Extra','To feed':'Khana kitnon ka','Length':'Dauraniya',
+ 'Venue':'Jagah (Venue)','Food':'Khana','Judging':'Judging','Total tokens':'Kul tokens','no model call':'model call nahi','REJECTED':'RAD',
+ 'Used':'Istemal hua','Out of date':'Purana','Rejected':'Rad','Not relevant':'Ghair mutaliq','Partly rejected':'Jazvi rad','Not read':'Parha nahi gaya',
+ 'Correct figures':'Figures durust','Within budget':'Budget ke andar','Venue fits':'Jagah kaafi hai','Schedule valid':'Schedule durust','Enough judges':'Judges kaafi hain','All areas covered':'Tamam areas shamil',
+ 'Update plan':'Plan update karein','Examples:':'Misaalein:','a change':'aik tabdeeli','a wrong message':'aik ghalat message',
+ 'Paste a new message here (email, WhatsApp, notice)…':'Naya message yahan paste karein (email, WhatsApp, notice)…',
+ 'Drop a .txt file here, or':'.txt file yahan drop karein, ya','a whole pack starts a fresh plan; new message(s) update it':'poora pack naya plan banata hai; naye messages plan update karte hain',
+ 'Nothing rejected.':'Kuch rad nahi hua.','Why:':'Wajah:','The plan was kept valid; nothing from this message was applied.':'Plan durust rakha gaya; is message ki koi cheez laagu nahi hui.',
+ 'Run':'Run','Areas that called a model':'Jin areas ne model call kiya','Predicted (before run)':'Pesh-goi (run se pehle)','Areas re-planned (code)':'Dobara plan hue areas (code)','Tokens':'Tokens','Time':'Waqt','Total':'Kul',
+ 'Setting':'Setting','Value':'Qeemat','From':'Kis ne','out of date':'purana','replaced by':'ki jagah aya',
+ 'Latest rejection':'Aakhri rad shuda message','Prediction for the last update':'Pichhle update ki pesh-goi','Actual':'Asal',
+ 'Everything on this page comes from the saved plan and trace (out/final_plan.json, out/execution_trace.json).':'Is page par sab kuch save shuda plan aur trace se aata hai (out/final_plan.json, out/execution_trace.json).',
+ 'running (max 120 s)…':'chal raha hai (zyada se zyada 120 s)…','done, reloading…':'mukammal, reload ho raha hai…','left':'baqi','of':'mein se',
+ 'Already spent':'Pehle se kharch','Judge honorarium':'Judges ka honorarium','Approved request':'Manzoor shuda request','Contingency reserve':'Hangami reserve',
+ 'Opening & briefing':'Aaghaz aur briefing','Build session':'Build session','Lunch':'Lunch','Closing & prizes':'Ikhtitaam aur inamaat','Judging (teams at tables, judges rotate)':'Judging',
  'only a wish from':'sirf aik khwahish:','nobody with budget authority approved it, so it is not paid for':'budget ke ikhtiyar wale kisi ne manzoor nahi kiya, is liye paisa nahi diya gaya',
- 'does not fit in the budget with essentials first':'zaroori cheezon ke baad budget mein gunjaish nahi',
- 'Language / Zubaan':'Zubaan / Language'
+ 'Declined':'Mana kiya','none':'koi nahi','min':'min','log out':'log out'
 };
 const UR_PAIRS=Object.entries(UR).sort((a,b)=>b[0].length-a[0].length);
 const T=s=>LANG==='ur'&&UR[s]?UR[s]:s;
-const RULES=LANG==='ur'?{
- 'R-COVER':'R-COVER: kisi ki di hui tadaad (khana, seats, judges) plan ki zaroorat se kam hai.',
- 'R-AUTH':'R-AUTH: bhejne wale ko yeh setting badalne ka ikhtiyar nahi.',
- 'R-STALE':'R-STALE: yeh message us fact se purana hai jise badalna chahta hai.',
- 'R-VALID':'R-VALID: isay maanne se 6 checks mein se koi nakaam ho jata.',
- 'R-CONFLICT':'R-CONFLICT: yeh message pehle se maujood fact (maslan venue ki apni batayi seats) se takrata hai.'}:{
- 'R-COVER':'R-COVER: a promised quantity (food, seats, judges) is below what the plan needs.',
- 'R-AUTH':'R-AUTH: the sender has no authority over this setting.',
- 'R-STALE':'R-STALE: the message is older than the fact it tries to replace.',
- 'R-VALID':'R-VALID: accepting it would make one of the 6 checks fail.',
- 'R-CONFLICT':'R-CONFLICT: the message contradicts an established fact (e.g. the venue\'s own seat count).'};
-const P = S.plan, fmt = n => n==null?'-':'Rs '+Number(n).toLocaleString('en-PK');
-const esc = s => String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-const src = id => id?`<span class="chip">msg #${id}</span>`:'';
+const RULES=LANG==='ur'?{'R-COVER':'R-COVER: kisi ki di hui tadaad (khana, seats, judges) plan ki zaroorat se kam hai.','R-AUTH':'R-AUTH: bhejne wale ko yeh setting badalne ka ikhtiyar nahi.',
+ 'R-STALE':'R-STALE: yeh message us fact se purana hai jise badalna chahta hai.','R-VALID':'R-VALID: isay maanne se 6 checks mein se koi nakaam ho jata.','R-CONFLICT':'R-CONFLICT: yeh message pehle se maujood fact se takrata hai.'}
+ :{'R-COVER':'R-COVER: a promised quantity (food, seats, judges) is below what the plan needs.','R-AUTH':'R-AUTH: the sender has no authority over this setting.',
+ 'R-STALE':'R-STALE: the message is older than the fact it tries to replace.','R-VALID':'R-VALID: accepting it would make one of the 6 checks fail.','R-CONFLICT':'R-CONFLICT: the message contradicts an established fact.'};
+const $=s=>document.querySelector(s),esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const rs=n=>n==null?'–':'Rs '+Math.round(n).toLocaleString('en-US');
+const P=S.plan,b=P.budget,hc=P.headcount,j=P.judging,s=P.schedule,v=P.venue,f=P.food;
+const COLORS=['#a78bfa','#f472b6','#fbbf24','#34d399','#60a5fa','#f87171','#fb923c','#22d3ee','#c084fc'];
 const served=location.protocol.startsWith('http');
-const tabs=[['plan','Plan'],['inbox','Inbox ('+S.messages.length+')'],['rej','Rejected ('+S.rejected.length+')'],['trace','Trace'],['runs','Runs & tokens']].concat(served?[['new','+ New message']]:[]);
-let cur=(location.hash||'#plan').slice(1);
-function show(t){cur=t;location.hash=t;tabs.forEach(([k])=>{document.getElementById('t-'+k).classList.toggle('hide',k!==t)});
- document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.dataset.t===t))}
-document.getElementById('nav').innerHTML=tabs.map(([k,l])=>`<button data-t="${k}" onclick="show('${k}')">${l}</button>`).join('');
-const b=P.budget, pct=b.limit?Math.min(100,Math.round(b.total/b.limit*100)):0;
-const okN=P.checks.filter(c=>c.ok).length;
-document.getElementById('kpis').innerHTML=[
- [P.valid?'<span class="ok"><i class="dot"></i>VALID</span>':'<span class="bad">INVALID</span>', okN+'/'+P.checks.length+' checks pass'],
- [P.people,'people to seat & feed'],[fmt(b.total),'of '+fmt(b.limit)+' ('+pct+'%)'],[fmt(b.left),'left in budget'],
- [S.rejected.length,'messages rejected'],[S.tokens_total.toLocaleString(),'tokens, all runs']
-].map(([v,l])=>`<div class="kpi"><b>${v}</b><span>${l}</span></div>`).join('');
+const check=n=>P.checks.find(c=>c.check===n)||{ok:false,why:''};
 
-// ---------- PLAN
-const v=P.venue,f=P.food,j=P.judging,s=P.schedule,hc=P.headcount;
-document.getElementById('t-plan').innerHTML=`<div class="grid">
-<div class="card"><h3>Checks <span class="${P.valid?'ok':'bad'}">${okN}/${P.checks.length}</span></h3><table>${P.checks.map(c=>`<tr><td>${c.ok?'<b class="ok">PASS</b>':'<b class="bad">FAIL</b>'}</td><td><b>${esc(c.check)}</b><br><span class="sub">${esc(c.why)}</span></td></tr>`).join('')}</table></div>
-<div class="card"><h3>Venue ${v?src(v.src):''}</h3>${v?`<div style="font-size:20px;font-weight:700">${esc(v.name)}</div>
-<div class="sub">${v.cap} seats for ${P.people} people · ${fmt(v.cost)} ${(v.feat||[]).map(x=>`<span class="chip">${esc(x)}</span>`).join('')}</div>
-<div class="bar"><i style="width:${Math.min(100,P.people/v.cap*100)}%"></i></div><div class="sub">${Math.round(P.people/v.cap*100)}% full</div>`:'<b class="bad">No valid venue</b>'}
-${P.venue_rejected.length?`<details><summary>Why not the others (${P.venue_rejected.length})</summary>${P.venue_rejected.map(r=>`<div class="sub">✗ ${esc(r)}</div>`).join('')}</details>`:''}</div>
-<div class="card"><h3>Food ${f?src(f.src):''}</h3>${f?`<div style="font-size:20px;font-weight:700">${f.boxes} × ${esc(f.name)}</div>
-<div class="sub">${esc(f.tier)} @ ${fmt(f.pph)} per head = <b>${fmt(f.cost)}</b></div>
-<div class="sub">${hc.students} students + ${j.judges_used} judges + ${hc.staff} staff${hc.extra?' + '+hc.extra+' extra':''}</div>
-${f.alternatives.map(a=>`<div class="sub">alternative: ${esc(a.tier)} @ ${fmt(a.pph)} = ${fmt(a.cost)}</div>`).join('')}`:'<b class="bad">No food option</b>'}</div>
-<div class="card"><h3>Judging</h3><div style="font-size:20px;font-weight:700">${j.judges_used} judges · ${j.teams} teams</div>
-<div class="sub">${j.teams_per_judge} teams each × ${j.min_per_team} min = ${j.block_min}-min judging block (max ${j.max_teams_per_judge}/judge)</div>
-<div class="sub">${j.judges_confirmed} confirmed → ${j.reserve_judges} on standby (cover for late/absent judges)</div></div>
-<div class="card" style="grid-column:1/-1"><h3>Schedule <span class="sub">${s.start} – ${s.end} · ${s.duration_min} min</span></h3><div class="tl">
-${s.slots.map(x=>`<div class="slot"><div class="t">${x.start} – ${x.end}</div><div class="k-${x.kind}"><b>${esc(x.what)}</b> <span class="sub">${x.min} min</span></div></div>`).join('')}</div></div>
-<div class="card" style="grid-column:1/-1"><h3>Budget <span class="sub">${fmt(b.total)} of ${fmt(b.limit)}</span></h3>
-<div class="bar"><i style="width:${pct}%;background:${pct>100?'var(--bad)':'var(--acc)'}"></i></div>
-<table>${b.lines.map(l=>`<tr><td>${esc(l.item)} ${src(l.src)}</td><td class="r">${fmt(l.amt)}</td></tr>`).join('')}
-<tr><td><b>Total</b></td><td class="r"><b>${fmt(b.total)}</b></td></tr><tr><td class="sub">Left</td><td class="r ok">${fmt(b.left)}</td></tr></table>
-${b.declined.map(d=>`<div class="warn">Declined: ${esc(d.item)} ${fmt(d.amt)} — ${esc(d.why)} ${src(d.src)}</div>`).join('')}</div>
-<div class="card" style="grid-column:1/-1"><h3>Constraints &amp; decisions in force</h3>
-<table>${Object.entries(S.world.set).map(([k,x])=>`<tr><td>${esc(k.replace(/_/g,' '))}</td><td class="r"><b>${esc(typeof x.v==='number'?x.v.toLocaleString():x.v)}</b></td><td>${src(x.msg)} <span class="sub">${esc(x.from||'')}</span></td></tr>`).join('')}
-${(P.needs||[]).map(n=>`<tr><td>${esc(n.area)} rule: ${esc(n.kind)}</td><td class="r"><b>${esc(n.what||'')}${n.v!=null?' '+n.v:''}</b></td><td>${src(n.msg)}</td></tr>`).join('')}
-${(S.world.superseded||[]).map(x=>`<tr><td class="sub" colspan="3">out of date: ${esc(x.what)} from msg #${x.msg} replaced by msg #${x.by}</td></tr>`).join('')}</table></div>
-${P.notes.length?`<div class="card" style="grid-column:1/-1"><h3>Other constraints noted</h3>${P.notes.map(n=>`<div><span class="chip">${esc(n.area)}</span> ${esc(n.text)} ${src(n.msg)}</div>`).join('')}</div>`:''}
-</div>`;
+// chips
+$('#chips').innerHTML=[['Students',hc.students],['Teams',hc.teams],['Judges',j.judges_used],['Staff',hc.staff]].concat(hc.extra?[['Extra',hc.extra]]:[])
+ .concat([['To feed',P.people],['Length',(s.duration_min/60)+' h']]).map(c=>`<span class="chip">${c[0]} <b>${esc(c[1])}</b></span>`).join('');
+// five area rows
+const AREAS=[['venue','🏛️','Venue',v?`${v.name} · seats ${v.cap} for ${P.people} · ${rs(v.cost)}`:'No valid venue','Venue fits'],
+ ['schedule','🕒','Schedule',`${s.start} – ${s.end} · ${s.slots.length} blocks · ${s.duration_min} min`,'Schedule valid'],
+ ['food','🍱','Food',f?`${f.boxes} × ${f.name} @ ${rs(f.pph)} = ${rs(f.cost)}`:'No food option','Correct figures'],
+ ['judging','⚖️','Judging',`${j.judges_used} judges needed of ${j.judges_confirmed??'?'} confirmed · ${j.teams_per_judge} teams each × ${j.min_per_team} min`,'Enough judges'],
+ ['budget','💰','Budget',`${rs(b.total)} of ${rs(b.limit)} · ${rs(b.left)} left`,'Within budget']];
+$('#rows').innerHTML=AREAS.map((a,i)=>`<div class="row" style="animation-delay:${i*60}ms"><div class="ic">${a[1]}</div><div class="body"><div class="nm">${a[2]}</div><div class="vl">${esc(a[3])}</div></div><span class="dot ${check(a[4]).ok?'ok':'bad'}" title="${esc(check(a[4]).why)}"></span></div>`).join('');
+// schedule bar
+$('#tl').innerHTML=s.slots.map((x,i)=>`<div style="flex:${x.min};background:${COLORS[i%COLORS.length]};animation-delay:${i*70}ms" title="${esc(x.start+' – '+x.end+' · '+x.what+' · '+x.min+' min')}">${x.min>=30?esc(x.what.split(' (')[0]):''}</div>`).join('');
+$('#tlkey').innerHTML=s.slots.map((x,i)=>`<span><b style="color:${COLORS[i%COLORS.length]}">●</b> ${esc(x.start)} ${esc(x.what.split(' (')[0])} (${x.min} min)</span>`).join('');
+// latest rejection alert
+const lastRej=S.rejected[S.rejected.length-1];
+if(lastRej)$('#alert').innerHTML=`<div class="alert"><b>Latest rejection</b> · msg #${lastRej.msg} [${esc(lastRej.rule)}]<br>${esc(lastRej.reason)}</div>`;
+// ticket
+const calls=S.runs.reduce((a,r)=>a+r.calls,0);
+$('#ticket').classList.toggle('badt',!P.valid);
+$('#tk-sub').textContent=P.valid?'ALL SIX CHECKS PASSED':'SOME CHECKS FAIL';
+$('#tk-title').innerHTML=P.valid?'The plan<br>is valid':'The plan<br>needs work';
+// budget bar
+const lim=b.limit||b.total||1;
+$('#seg').innerHTML=b.lines.map((l,i)=>`<i style="width:${l.amt/lim*100}%;background:${COLORS[i%COLORS.length]};animation-delay:${i*60}ms" title="${esc(l.item)}: ${rs(l.amt)}"></i>`).join('');
+$('#legend').innerHTML=b.lines.map((l,i)=>`<span><s style="background:${COLORS[i%COLORS.length]}"></s>${esc(l.item)} ${rs(l.amt)}</span>`).join('')
+ +b.declined.map(d=>`<span style="color:var(--warn)">Declined: ${esc(d.item)} ${rs(d.amt)} — ${esc(d.why)}</span>`).join('');
+// checks
+$('#checks').innerHTML=P.checks.map(c=>`<div class="${c.ok?'on':'off'}" title="${esc(c.why)}">${esc(c.check)}</div>`).join('');
 
-// ---------- INBOX
-document.getElementById('t-inbox').innerHTML=S.messages.map(m=>{const st=(m.status||'').split(' ')[0];
- return `<div class="msg ${st}"><div><b>#${m.id}</b> ${esc(m.from)} <span class="sub">${esc(m.role)} · ${esc(m.date||'')}</span>
- <span class="chip st-${st}">${esc(m.status||'')}</span> ${(m.areas||[]).map(a=>`<span class="chip">${a}</span>`).join('')}</div>
- <div style="margin:4px 0">${esc(m.text)}</div>${m.reason?`<div class="sub">→ ${esc(m.reason)}</div>`:''}
- <details><summary class="sub">facts extracted (${m.f.length})</summary><pre>${esc(JSON.stringify(m.f,null,1))}</pre></details></div>`}).join('');
+// tabs
+const TABS=[['trace','Trace'],['rej','Rejected messages'],['inbox','Message pack'],['runs','Runs & tokens'],['cons','Constraints']];
+let cur=(location.hash||'#trace').slice(1);if(!TABS.some(t=>t[0]===cur))cur='trace';
+$('#tabs').innerHTML=TABS.map(([k,l])=>`<button class="tab" data-p="${k}">${l}${k==='rej'?` <span>(${S.rejected.length})</span>`:k==='inbox'?` <span>(${S.messages.length})</span>`:''}</button>`).join('');
+function show(t){cur=t;history.replaceState(null,'','#'+t);document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('on',x.dataset.p===t));
+ document.querySelectorAll('.panel').forEach(p=>p.classList.toggle('on',p.id==='p-'+t))}
+document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>show(t.dataset.p));
 
-// ---------- REJECTED
-document.getElementById('t-rej').innerHTML=S.rejected.length?S.rejected.map(r=>`<div class="rej"><b class="bad">Message #${r.msg} rejected · rule ${esc(r.rule)}</b>
-<div style="margin:6px 0">“${esc(r.text)}”</div><div><b>Why:</b> ${esc(r.reason)}</div>${String(r.rule).split('+').map(x=>`<div class="sub">${esc(RULES[x]||'')}</div>`).join('')}<div class="sub">The plan was kept valid; nothing from this message was applied.</div></div>`).join('')
- :'<div class="card">No messages rejected yet.</div>';
+// TRACE: exactly the recorded events (real model calls + code decisions + rejections)
+$('#p-trace').innerHTML=S.runs.map((r,ri)=>`<div class="runh"><span>${esc(r.label)}</span><span class="tok">${r.calls} model call(s) · ${r.tokens.total} tokens · ${r.secs}s</span></div>`+
+ r.events.map(e=>e.kind==='call'?`<div class="call"><div class="top"><span class="num">#${e.no}</span><b>${esc(e.model)}</b><span class="tag">${esc(e.area)}</span><span class="tok">in ${e.usage.prompt} · out ${e.usage.completion} · ${e.usage.total} tokens · ${e.secs}s</span></div>
+  <details><summary>Input and output</summary><pre>INPUT:\n${esc(e.input)}\n\nOUTPUT:\n${esc(e.output)}</pre></details></div>`
+ :e.kind==='reject'?`<div class="codeev bad"><span class="tag rej">REJECTED</span> #${e.msg} [${esc(e.rule)}] ${esc(e.reason)}</div>`
+ :`<div class="codeev"><span class="tag code">no model call</span> ${esc(e.area)} · ${esc(e.msg)}</div>`).join('')).join('')
+ +`<details style="padding:0 14px 10px"><summary>Raw printed trace</summary><pre>${esc(S.trace_lines.join('\n'))}</pre></details>`
+ +`<div class="total"><div>Total tokens</div><span>${S.tokens_total.toLocaleString('en-US')}</span></div>`;
 
-// ---------- TRACE
-document.getElementById('t-trace').innerHTML=S.runs.map((r,i)=>`<div class="card" style="margin-bottom:12px"><h3>${esc(r.label)} <span class="sub">${r.calls} model call(s) · ${r.tokens.total} tokens · ${r.secs}s</span></h3>
-${r.events.map(e=>e.kind==='call'?`<details ${i===S.runs.length-1?'open':''}><summary>MODEL CALL #${e.no} · ${esc(e.model)} · area=<span class="chip">${e.area}</span> · tokens in ${e.usage.prompt} / out ${e.usage.completion} / total ${e.usage.total}</summary>
-<div class="sub">Input</div><pre>${esc(e.input)}</pre><div class="sub">Output</div><pre>${esc(e.output)}</pre></details>`
- : e.kind==='reject'?`<div class="codeev bad">REJECTED #${e.msg} [${esc(e.rule)}] ${esc(e.reason)}</div>`
- :`<div class="codeev">[code · ${e.area}] ${esc(e.msg)}</div>`).join('')}</div>`).join('')
- +`<details><summary>Raw printed trace</summary><pre style="max-height:600px">${esc(S.trace_lines.join('\n'))}</pre></details>`;
+// REJECTED
+$('#p-rej').innerHTML=S.rejected.length?S.rejected.slice().reverse().map(r=>`<div class="msg"><div><b>Message #${r.msg}</b> <span class="meta">· [${esc(r.rule)}]</span>
+ <div class="meta">“${esc(r.text)}”</div><div class="reason">Why: ${esc(r.reason)}</div>
+ ${String(r.rule).split('+').map(x=>`<div class="why2">${esc(RULES[x]||'')}</div>`).join('')}<div class="why2">The plan was kept valid; nothing from this message was applied.</div></div><span class="stamp rej">Rejected</span></div>`).join('')
+ :`<div class="msg">Nothing rejected.</div>`;
 
-// ---------- RUNS
-document.getElementById('t-runs').innerHTML=`<div class="card"><table><tr><th>Run</th><th>Model calls</th><th>Areas that called a model</th><th>Predicted (before run)</th><th>Areas re-planned (code)</th><th class="r">Tokens</th><th class="r">Time</th></tr>
-${S.runs.map(r=>`<tr><td>${esc(r.label)}</td><td>${r.calls}</td><td>${r.model_areas.map(a=>`<span class="chip">${a}</span>`).join('')}</td>
-<td>${(r.areas_predicted||[]).map(a=>`<span class="chip">${a}</span>`).join('')||'<span class="sub">-</span>'}</td><td>${(r.areas_replanned||[]).map(a=>`<span class="chip">${a}</span>`).join('')||'<span class="sub">none</span>'}</td><td class="r">${r.tokens.total}</td><td class="r">${r.secs}s</td></tr>`).join('')}
-<tr><td><b>Total</b></td><td>${S.runs.reduce((a,r)=>a+r.calls,0)}</td><td></td><td></td><td></td><td class="r"><b>${S.tokens_total}</b></td><td></td></tr></table>
-<p class="sub">Only the reading step uses a model. Venue, schedule, food, judging and budget are pure code, so a new message costs one small model call and re-plans only the areas whose numbers changed.</p></div>`;
-document.getElementById('t-new').innerHTML=`<div class="card"><h3>Submit a new message</h3>
-<p class="sub">Goes through the same pipeline as <code>python main.py</code>: one 'reading' model call per message, then code re-plans and validates. A message that would break the plan is rejected and the plan is kept.</p>
-<textarea id="nm" rows="6" style="width:100%;font:inherit;padding:8px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--ink)" placeholder="e.g. Finance here. The printing bill came in at Rs 15,000, not Rs 10,000."></textarea>
-<p><button id="nb" style="padding:8px 16px;border-radius:999px;border:0;background:var(--acc);color:#fff;font-weight:600;cursor:pointer">Run update</button> <span id="ns" class="sub"></span></p>
-<div id="drop" style="border:2px dashed var(--line);border-radius:12px;padding:18px;text-align:center;margin:10px 0">
-<b>Upload a .txt file</b><br><span class="sub">A whole pack starts a fresh plan; a file with new message(s) is an update. Drag the file here or</span>
-<input type="file" id="nf" accept=".txt,text/plain"></div><pre id="no" class="hide"></pre>
-<p class="sub">Files: <a href="/out/final_plan.json">final_plan.json</a> · <a href="/out/execution_trace.json">execution_trace.json</a> · <a href="/out/rejected_messages.json">rejected_messages.json</a> · <a href="/out/final_report.txt">final_report.txt</a></p></div>`;
-async function send(url,payload){const nb=document.getElementById('nb');nb.disabled=true;
- document.getElementById('ns').textContent=T('running (max 120 s)...');
- const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}).then(r=>r.json()).catch(e=>({output:String(e)}));
- const o=document.getElementById('no');o.classList.remove('hide');o.textContent=r.output||r.error;
- document.getElementById('ns').innerHTML='<a href="#plan" onclick="setTimeout(()=>location.reload(),50)">'+T('done · reload dashboard')+'</a>';nb.disabled=false}
-const nb=document.getElementById('nb');if(nb)nb.onclick=()=>{const t=document.getElementById('nm').value.trim();if(t)send('/api/message',{text:t})};
-function upload(f){if(!f)return;f.text().then(t=>send('/api/upload',{name:f.name,text:t}))}
-const nf=document.getElementById('nf');if(nf)nf.onchange=()=>upload(nf.files[0]);
-const dz=document.getElementById('drop');if(dz){dz.ondragover=e=>{e.preventDefault();dz.style.borderColor='var(--acc)'};
- dz.ondragleave=()=>dz.style.borderColor='var(--line)';dz.ondrop=e=>{e.preventDefault();upload(e.dataTransfer.files[0])}}
-show(tabs.some(t=>t[0]===cur)?cur:'plan');
-// ---------- LANGUAGE: English / Roman Urdu (interface text only; trace lines stay exactly as printed)
-function translate(root){if(LANG!=='ur')return;const w=document.createTreeWalker(root,NodeFilter.SHOW_TEXT,{acceptNode:n=>n.parentElement.closest('pre,textarea,code')?2:1});
+// MESSAGE PACK with stamps
+const staleIds=new Set((S.world.superseded||[]).map(x=>x.msg));
+const stamp=m=>{const st=(m.status||'');if(st==='rejected')return['rej','Rejected'];if(st.startsWith('partly'))return['rej','Partly rejected'];
+ if(st==='ignored')return['irr','Not relevant'];if(st==='not read')return['irr','Not read'];if(staleIds.has(m.id))return['stale','Out of date'];return['used','Used']};
+$('#p-inbox').innerHTML=S.messages.map(m=>{const [k,l]=stamp(m);return `<div class="msg"><div><b>${m.id}. ${esc(m.from)}</b> <span class="meta">· ${esc(m.role)}${m.date?' · '+esc(m.date):''} ${(m.areas||[]).map(a=>`<span class="tag">${a}</span>`).join(' ')}</span>
+ <div class="meta">${esc(m.text)}</div>${m.reason?`<div class="reason">${esc(m.reason)}</div>`:''}
+ <details><summary>facts extracted (${m.f.length})</summary><pre>${esc(JSON.stringify(m.f,null,1))}</pre></details></div><span class="stamp ${k}">${l}</span></div>`}).join('');
+
+// RUNS
+$('#p-runs').innerHTML=`<table><tr><th>Run</th><th>Model calls</th><th>Areas that called a model</th><th>Predicted (before run)</th><th>Areas re-planned (code)</th><th class="r">Tokens</th><th class="r">Time</th></tr>
+${S.runs.map(r=>`<tr><td>${esc(r.label)}</td><td>${r.calls}</td><td>${r.model_areas.map(a=>`<span class="tag">${a}</span>`).join(' ')}</td>
+<td>${(r.areas_predicted||[]).map(a=>`<span class="tag">${a}</span>`).join(' ')||'–'}</td><td>${(r.areas_replanned||[]).map(a=>`<span class="tag">${a}</span>`).join(' ')||'none'}</td>
+<td class="r">${r.tokens.total}</td><td class="r">${r.secs}s</td></tr>`).join('')}
+<tr><td><b>Total</b></td><td>${calls}</td><td></td><td></td><td></td><td class="r"><b>${S.tokens_total}</b></td><td></td></tr></table>`;
+
+// CONSTRAINTS
+$('#p-cons').innerHTML=`<table><tr><th>Setting</th><th class="r">Value</th><th>From</th></tr>
+${Object.entries(S.world.set).map(([k,x])=>`<tr><td>${esc(k.replace(/_/g,' '))}</td><td class="r"><b>${esc(typeof x.v==='number'?x.v.toLocaleString('en-US'):x.v)}</b></td><td>msg #${x.msg} · ${esc(x.from||'')}</td></tr>`).join('')}
+${(P.needs||[]).map(n=>`<tr><td>${esc(n.area)} rule: ${esc(n.kind)}</td><td class="r"><b>${esc(n.what||'')}${n.v!=null?' '+n.v:''}</b></td><td>msg #${n.msg}</td></tr>`).join('')}
+${(P.notes||[]).map(n=>`<tr><td>note (${esc(n.area)})</td><td colspan="2">${esc(n.text)} · msg #${n.msg}</td></tr>`).join('')}
+${(S.world.superseded||[]).map(x=>`<tr><td colspan="3" style="color:var(--mut)">out of date: ${esc(x.what)} from msg #${x.msg} replaced by msg #${x.by}</td></tr>`).join('')}</table>`;
+
+// prediction slip for the last update
+const lastRun=S.runs[S.runs.length-1];
+if(S.runs.length>1)$('#slip').innerHTML=`Prediction for the last update: model calls in <b>${lastRun.model_areas.join(', ')}</b> (${lastRun.calls} call) · Actual: <b>${lastRun.calls?lastRun.model_areas.join(', '):'none'}</b> ✓ · areas re-planned by code: ${(lastRun.areas_replanned||[]).join(', ')||'none'}`;
+
+// composer (only when served by server.py)
+if(served){$('#composer').classList.remove('hide');
+ async function sendTo(url,payload){const o=$('#out');o.classList.remove('hide');o.textContent=T('running (max 120 s)…');$('#send').disabled=true;
+  const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}).then(r=>r.json()).catch(e=>({output:String(e)}));
+  o.textContent=(r.output||r.error||'')+'\n'+T('done, reloading…');$('#send').disabled=false;setTimeout(()=>location.reload(),1200)}
+ $('#send').onclick=()=>{const t=$('#newmsg').value.trim();if(t)sendTo('/api/message',{text:t})};
+ const up=file=>{if(file)file.text().then(t=>sendTo('/api/upload',{name:file.name,text:t}))};
+ $('#nf').onchange=()=>up($('#nf').files[0]);
+ const dz=$('#drop');dz.ondragover=e=>{e.preventDefault();dz.classList.add('over')};dz.ondragleave=()=>dz.classList.remove('over');
+ dz.ondrop=e=>{e.preventDefault();dz.classList.remove('over');up(e.dataTransfer.files[0])};
+ document.querySelectorAll('.ex').forEach(x=>x.onclick=()=>{$('#newmsg').value=x.dataset.t;$('#newmsg').focus()});
+}
+// copy
+$('#copy').onclick=async()=>{const txt=JSON.stringify({plan:P,rejected:S.rejected,runs:S.runs.map(r=>({label:r.label,calls:r.calls,tokens:r.tokens})),total_tokens:S.tokens_total},null,2);
+ try{await navigator.clipboard.writeText(txt);$('#copy').textContent=T('Copied')+' ✓'}catch(e){$('#copy').textContent='Copy blocked'}setTimeout(()=>$('#copy').textContent=T('Copy plan + trace'),1800)};
+show(cur);
+// language
+function translate(root){if(LANG!=='ur')return;const w=document.createTreeWalker(root,NodeFilter.SHOW_TEXT,{acceptNode:n=>n.parentElement.closest('pre,textarea,code,script,style')?2:1});
  const nodes=[];while(w.nextNode())nodes.push(w.currentNode);
- for(const n of nodes){let s=n.nodeValue;for(const [en,ur] of UR_PAIRS){if(s.includes(en))s=s.split(en).join(ur)}n.nodeValue=s}
+ for(const n of nodes){let t=n.nodeValue;for(const [en,ur] of UR_PAIRS){if(t.includes(en))t=t.split(en).join(ur)}n.nodeValue=t}
  document.querySelectorAll('[placeholder]').forEach(e=>e.placeholder=T(e.placeholder))}
-document.getElementById('lang').textContent=LANG==='ur'?'English':'Roman Urdu';
-document.getElementById('lang').onclick=()=>{try{localStorage.setItem('lang',LANG==='ur'?'en':'ur')}catch(e){}location.reload()};
+$('#lang').textContent=LANG==='ur'?'English':'Roman Urdu';
+$('#lang').onclick=()=>{try{localStorage.setItem('lang',LANG==='ur'?'en':'ur')}catch(e){}location.reload()};
 translate(document.body);
-// count-up animation for the numbers in the KPI tiles
-document.querySelectorAll('.kpi b').forEach(el=>{const txt=el.textContent,m=txt.match(/[\d,]+/);if(!m||el.querySelector('.dot'))return;
- const end=Number(m[0].replace(/,/g,''));if(!end)return;const t0=performance.now(),dur=900;
- const step=t=>{const k=Math.min(1,(t-t0)/dur),v=Math.round(end*(1-Math.pow(1-k,3)));el.textContent=txt.replace(m[0],v.toLocaleString('en-PK'));if(k<1)requestAnimationFrame(step)};
- requestAnimationFrame(step)});
-if(!served)setTimeout(()=>location.reload(),8000);
+// count-up numbers on the ticket
+function count(el,to,fmt){const t0=performance.now();(function f(t){const k=Math.min(1,(t-t0)/900),e=1-Math.pow(1-k,3);el.textContent=fmt(Math.round(to*e));if(k<1)requestAnimationFrame(f)})(t0)}
+count($('#tk-cost'),b.total,rs);count($('#tk-calls'),calls,n=>n);count($('#tk-tok'),S.tokens_total,n=>n.toLocaleString('en-US'));
+if(!served)setTimeout(()=>location.reload(),15000);
 </script></body></html>"""
 
 
