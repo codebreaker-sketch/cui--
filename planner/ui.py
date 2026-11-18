@@ -204,8 +204,7 @@ $('#tk-title').innerHTML=P.valid?'The plan<br>is valid':'The plan<br>needs work'
 // budget bar
 const lim=b.limit||b.total||1;
 $('#seg').innerHTML=b.lines.map((l,i)=>`<i style="width:${l.amt/lim*100}%;background:${COLORS[i%COLORS.length]};animation-delay:${i*60}ms" title="${esc(l.item)}: ${rs(l.amt)}"></i>`).join('');
-$('#legend').innerHTML=b.lines.map((l,i)=>`<span><s style="background:${COLORS[i%COLORS.length]}"></s>${esc(l.item)} ${rs(l.amt)}</span>`).join('')
- +b.declined.map(d=>`<span style="color:var(--warn)">Declined: ${esc(d.item)} ${rs(d.amt)} — ${esc(d.why)}</span>`).join('');
+// budget details stay in the bar's hover text and in the Trace / Constraints tabs
 // checks
 $('#checks').innerHTML=P.checks.map(c=>`<div class="${c.ok?'on':'off'}" title="${esc(c.why)}">${esc(c.check)}</div>`).join('');
 
