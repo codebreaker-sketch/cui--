@@ -1,39 +1,77 @@
 # Hackathon Planner: "read with a model, decide with code"
 
-One command, every time:
+## One command, every time
 
 ```
-python run.py <messages.txt>
+python main.py
 ```
 
-* If there is no saved plan yet, or the file holds a whole pack (4 or more messages), it plans from scratch.
-* Otherwise it treats the file as new message(s) and **updates** the saved plan.
-* The trace prints to the terminal. The files `out/plan.txt`, `out/trace.txt` and `out/final_report.txt` are written, and `out/index.html` is the UI. Open it in any browser; it refreshes itself.
+It reads **`messages.txt`** (next to `main.py`; git-ignored, so `git status` stays clean).
 
-Setup: `pip install requests`, then copy `.env.example` to `.env` and add your key. Any OpenAI-compatible endpoint works (Groq, Ollama, OpenRouter, ...).
+| What is in `messages.txt` | What happens |
+|---|---|
+| A whole pack of messages, none seen before (4 or more) | **Full run**: a fresh plan. Limit 120 s. |
+| Any message(s) not processed before (replace the file with the new message, or append it) | **Update**: only the new message(s) are read. Limit 60 s and at most 5 model calls. |
+| Nothing new | Prints the current plan; no model call. |
 
-## Architecture (and what breaks without each part)
+Setup: `pip install requests`, then copy `.env.example` to `.env`. Any OpenAI-compatible endpoint works
+(`BASE_URL`, `API_KEY`, `MODEL_NAME`; local Ollama, Groq, OpenAI ...).
 
-| Part | File | What it does | Without it |
+Outputs (in `out/`): `final_plan.json`, `execution_trace.json`, `rejected_messages.json`,
+`final_report.txt` (plan plus full printed trace, ready to upload) and `index.html` (dashboard).
+Web UI with a "New message" box: `python server.py`, then open http://localhost:8000.
+
+## Test-day procedure
+1. Paste the unseen pack into `messages.txt` and run `python main.py`.
+2. For each new message: replace the contents of `messages.txt` with that message and run `python main.py`.
+3. **Prediction slip:** only the **reading** area makes model calls, one call per new message.
+   venue, schedule, food, judging and budget make **0** model calls (they are code).
+   After reading, the trace lists which areas the message affects; code re-plans only those.
+4. Upload `out/final_report.txt` (or the JSON files).
+
+## How it works (what each part is for, and what breaks without it)
+
+```
+messages.txt -> split (code) -> header: sender, date, role (code)
+             -> tag every number (code) -> rules.py labels obvious numbers (code)
+             -> model labels the rest  [area tag: reading, 1 call per message]
+             -> fact store: newest wins, authority checks (code)
+             -> planner: venue / schedule / food / judging / budget (code)
+             -> validator: the 6 checks (code) -> accept, or reject with rule + reason
+             -> trace + JSON files + dashboard
+```
+
+| Part | File | What it does | What breaks without it |
 |---|---|---|---|
-| Reader (the **only** model call) | `planner/reader.py` | Turns raw English / Roman Urdu messages into typed facts (`set`, `venue`, `food`, `spent`, `req`, `need`, `qty`, `note`), with sender role and date | Code cannot understand free text |
-| Fact store | `planner/facts.py` | Merges facts and remembers which message each came from. The newest date wins (**out-of-date** messages are superseded). **R-STALE**: an older message can't override. **R-AUTH**: only someone with authority can change core settings (budget, headcount, hours) | Old prices get used, and a student could raise the budget |
-| Planner | `planner/plan.py` | Pure arithmetic. People = students + judges needed + staff + extras. Judges = ceil(teams × judges per team ÷ max teams per judge). Venue = cheapest one that fits and meets every rule. An **optimizer** searches venue × food tier × optional requests and keeps essentials first. The schedule fills the exact duration | The LLM would do the maths, which costs tokens and gets numbers wrong |
-| Validator | `planner/plan.py:validate` | Runs the 6 graded checks: figures, budget, venue fits, schedule valid, enough judges, all areas covered. It also checks quantity promises (**R-COVER**) | Nothing would stop an invalid plan or a wrong message |
-| Update gate | `run.py:update_run` | Applies a new message to a copy of the plan. If any rule fails, it **rejects the message, keeps the old valid plan and prints why**. Otherwise it re-plans only the areas whose numbers changed | One bad message would break the plan |
-| Trace | `planner/trace.py` | For every model call: number, model, area, input, output, and tokens as reported by the API. Code decisions are logged as `[CODE · area]` with 0 tokens | No proof of tokens or reasoning |
-| UI | `planner/ui.py` | A single self-contained HTML file with tabs for Plan, Inbox, Rejected, Trace, and Runs & tokens | Judges can't see the plan quickly |
-| Policies | `policies.json` | **Our** planning choices: start time, lunch length, food-tier preference. These are not facts from messages | Planning defaults would be hidden in code |
+| Splitter + header reader | `planner/reader.py` | Splits the file into messages, keeping the text exactly. Code reads each sender, date and role (dean = authority, caterer, finance ...) from the header | Dates and senders guessed by a model are wrong, so "newest wins" breaks |
+| Number tagger | `planner/reader.py:tag` | Code finds every number and tags it `150(#2)`. **Values always come from the text, never from the model** | A model could invent or mistype a figure |
+| Code-first labeller | `planner/rules.py` | General wording patterns ("150 students", "seats 250", "Rs 850 per head", "teams of 4", "at most 3 teams") label most numbers with no model. Also finds "venue must have X", "Hall X has Y" and "X is not available" | A tiny model mislabels obvious numbers |
+| Model (reading only) | `planner/llm.py` | Labels whatever code could not. One short call per message, run in parallel | Unusual wording and new kinds of constraint would be missed |
+| Fact store | `planner/facts.py` | Merges facts with provenance. **R-STALE**: an older message never overrides a newer one (out-of-date prices). **R-AUTH**: only someone with authority can change core settings | Old prices are used; a student could change the budget |
+| Planner | `planner/plan.py:build` | Pure arithmetic. People = students + judges needed + staff + extra. Judges needed = ceil(teams x judges per team / max teams per judge). Cheapest venue that fits and meets every rule. Food tier preference. Schedule fills the exact duration | The model would do the maths, costing tokens and getting numbers wrong |
+| Validator | `planner/plan.py:validate` | The 6 graded checks, plus **R-COVER** (a promised quantity such as 100 boxes is below what is needed) | Nothing would stop a bad message from breaking the plan |
+| Update gate | `main.py:update_run` | Applies a new message to a **copy** of the state. If any rule or check fails, the message is rejected, the old valid plan is kept, and the reason is printed | One wrong message would break the plan |
+| Trace | `planner/trace.py` | Each model call: number, model, area tag, input, output, tokens **as the API reported them**, seconds. Code decisions are printed as `[CODE · area]` | No proof of tokens or reasoning |
+| Policies | `policies.json` | **Our** choices, not facts: default start time, lunch length, food-tier preference, who may approve extra spending | Planning defaults would be hidden in code |
+| UI | `planner/ui.py`, `server.py` | Plan, constraints, inbox with status, rejected messages with reasons, trace, tokens per run, predicted vs re-planned areas, new-message box | Judges can't see the plan quickly |
 
-## Why this design wins on the scoring
-* **Tokens**: one model call per full run and one per update. Arithmetic is free.
-* **Small model bonus**: extraction is the only model task, so an 8B model or smaller works.
-* **Predicting a change**: only the `reading` area ever makes a model call. Code re-plans the affected areas, and the trace shows which.
-* **Catching the wrong message**: named rules (R-COVER, R-AUTH, R-STALE, R-VALID) each print a reason.
-* **New kinds of constraint**: the generic `need` facts (break, require, min_capacity, max_cost, extra_people, surcharge, forbid, fixed) are applied by code. Anything else becomes a `note` that is shown in the plan.
-
-## Rules for rejecting a message
-* **R-COVER**: a promised quantity (food boxes, seats, judges) is lower than what the plan needs.
-* **R-AUTH**: the sender has no authority over the thing they are changing.
+## Rejection rules (printed in the trace as `[REJECTED · message #n] rule ...`)
+* **R-COVER**: a promised quantity (food boxes, seats, judges) is lower than the plan needs.
+* **R-AUTH**: the sender has no authority over the setting they are changing (e.g. a student society setting the budget).
 * **R-STALE**: the message is dated earlier than the fact it tries to replace.
-* **R-VALID**: accepting the message would make any of the 6 checks fail.
+* **R-VALID**: accepting it would make one of the 6 checks fail (too few judges, over budget, venue too small, schedule doesn't fit).
+
+Requests ("Can we get a DJ?") are paid for only if someone with budget authority asked; otherwise they are listed as declined, with the reason.
+
+## Token efficiency
+Only reading uses a model, and most numbers are labelled by code. A full run of the sample pack is about 5.4k tokens across 8 calls; an update is about 630 tokens in 1 call.
+The default model is `qwen2.5` running locally (on the small-model list, since it runs on our laptop).
+
+## Tests
+`samples/` holds the brief's sample pack and its two practice messages. `tests/pack2/` holds our own unseen-style pack: new senders, Roman Urdu, a wheelchair-access rule, volunteers, a 9:00 start, a 5-hour event. Its four updates are 2 valid, 1 with too few judges and 1 with no authority.
+
+```
+python main.py samples/sample_pack.txt    # (optional path argument for testing)
+python main.py samples/change_printing.txt
+python main.py samples/wrong_caterer.txt
+```

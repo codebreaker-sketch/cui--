@@ -5,7 +5,6 @@ import json
 
 TEMPLATE = r"""<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta http-equiv="refresh" content="6">
 <title>Hackathon Planner</title>
 <style>
 :root{--bg:#f6f7fb;--card:#fff;--ink:#14162b;--mut:#646a86;--line:#e3e6f0;--acc:#3b5bfd;--ok:#12a150;--bad:#d93848;--warn:#c98a00;--chip:#eef1ff}
@@ -44,14 +43,15 @@ details{border:1px solid var(--line);border-radius:10px;padding:8px 12px;margin:
 <div class="kpis" id="kpis"></div>
 <nav id="nav"></nav>
 <section id="t-plan"></section><section id="t-inbox" class="hide"></section><section id="t-rej" class="hide"></section>
-<section id="t-trace" class="hide"></section><section id="t-runs" class="hide"></section>
+<section id="t-trace" class="hide"></section><section id="t-runs" class="hide"></section><section id="t-new" class="hide"></section>
 </div>
 <script>
 const S = __DATA__;
 const P = S.plan, fmt = n => n==null?'-':'Rs '+Number(n).toLocaleString('en-PK');
 const esc = s => String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const src = id => id?`<span class="chip">msg #${id}</span>`:'';
-const tabs=[['plan','Plan'],['inbox','Inbox ('+S.messages.length+')'],['rej','Rejected ('+S.rejected.length+')'],['trace','Trace'],['runs','Runs & tokens']];
+const served=location.protocol.startsWith('http');
+const tabs=[['plan','Plan'],['inbox','Inbox ('+S.messages.length+')'],['rej','Rejected ('+S.rejected.length+')'],['trace','Trace'],['runs','Runs & tokens']].concat(served?[['new','+ New message']]:[]);
 let cur=(location.hash||'#plan').slice(1);
 function show(t){cur=t;location.hash=t;tabs.forEach(([k])=>{document.getElementById('t-'+k).classList.toggle('hide',k!==t)});
  document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.dataset.t===t))}
@@ -86,6 +86,10 @@ ${s.slots.map(x=>`<div class="slot"><div class="t">${x.start} – ${x.end}</div>
 <table>${b.lines.map(l=>`<tr><td>${esc(l.item)} ${src(l.src)}</td><td class="r">${fmt(l.amt)}</td></tr>`).join('')}
 <tr><td><b>Total</b></td><td class="r"><b>${fmt(b.total)}</b></td></tr><tr><td class="sub">Left</td><td class="r ok">${fmt(b.left)}</td></tr></table>
 ${b.declined.map(d=>`<div class="warn">Declined: ${esc(d.item)} ${fmt(d.amt)} — ${esc(d.why)} ${src(d.src)}</div>`).join('')}</div>
+<div class="card" style="grid-column:1/-1"><h3>Constraints &amp; decisions in force</h3>
+<table>${Object.entries(S.world.set).map(([k,x])=>`<tr><td>${esc(k.replace(/_/g,' '))}</td><td class="r"><b>${esc(typeof x.v==='number'?x.v.toLocaleString():x.v)}</b></td><td>${src(x.msg)} <span class="sub">${esc(x.from||'')}</span></td></tr>`).join('')}
+${(P.needs||[]).map(n=>`<tr><td>${esc(n.area)} rule: ${esc(n.kind)}</td><td class="r"><b>${esc(n.what||'')}${n.v!=null?' '+n.v:''}</b></td><td>${src(n.msg)}</td></tr>`).join('')}
+${(S.world.superseded||[]).map(x=>`<tr><td class="sub" colspan="3">out of date: ${esc(x.what)} from msg #${x.msg} replaced by msg #${x.by}</td></tr>`).join('')}</table></div>
 ${P.notes.length?`<div class="card" style="grid-column:1/-1"><h3>Other constraints noted</h3>${P.notes.map(n=>`<div><span class="chip">${esc(n.area)}</span> ${esc(n.text)} ${src(n.msg)}</div>`).join('')}</div>`:''}
 </div>`;
 
@@ -110,12 +114,22 @@ ${r.events.map(e=>e.kind==='call'?`<details ${i===S.runs.length-1?'open':''}><su
  +`<details><summary>Raw printed trace</summary><pre style="max-height:600px">${esc(S.trace_lines.join('\n'))}</pre></details>`;
 
 // ---------- RUNS
-document.getElementById('t-runs').innerHTML=`<div class="card"><table><tr><th>Run</th><th>Model calls</th><th>Areas that called a model</th><th>Areas re-planned (code)</th><th class="r">Tokens</th><th class="r">Time</th></tr>
+document.getElementById('t-runs').innerHTML=`<div class="card"><table><tr><th>Run</th><th>Model calls</th><th>Areas that called a model</th><th>Predicted (before run)</th><th>Areas re-planned (code)</th><th class="r">Tokens</th><th class="r">Time</th></tr>
 ${S.runs.map(r=>`<tr><td>${esc(r.label)}</td><td>${r.calls}</td><td>${r.model_areas.map(a=>`<span class="chip">${a}</span>`).join('')}</td>
-<td>${(r.areas_replanned||[]).map(a=>`<span class="chip">${a}</span>`).join('')||'<span class="sub">none</span>'}</td><td class="r">${r.tokens.total}</td><td class="r">${r.secs}s</td></tr>`).join('')}
-<tr><td><b>Total</b></td><td>${S.runs.reduce((a,r)=>a+r.calls,0)}</td><td></td><td></td><td class="r"><b>${S.tokens_total}</b></td><td></td></tr></table>
+<td>${(r.areas_predicted||[]).map(a=>`<span class="chip">${a}</span>`).join('')||'<span class="sub">-</span>'}</td><td>${(r.areas_replanned||[]).map(a=>`<span class="chip">${a}</span>`).join('')||'<span class="sub">none</span>'}</td><td class="r">${r.tokens.total}</td><td class="r">${r.secs}s</td></tr>`).join('')}
+<tr><td><b>Total</b></td><td>${S.runs.reduce((a,r)=>a+r.calls,0)}</td><td></td><td></td><td></td><td class="r"><b>${S.tokens_total}</b></td><td></td></tr></table>
 <p class="sub">Only the reading step uses a model. Venue, schedule, food, judging and budget are pure code, so a new message costs one small model call and re-plans only the areas whose numbers changed.</p></div>`;
+document.getElementById('t-new').innerHTML=`<div class="card"><h3>Submit a new message</h3>
+<p class="sub">Goes through the same pipeline as <code>python main.py</code>: one 'reading' model call per message, then code re-plans and validates. A message that would break the plan is rejected and the plan is kept.</p>
+<textarea id="nm" rows="6" style="width:100%;font:inherit;padding:8px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--ink)" placeholder="e.g. Finance here. The printing bill came in at Rs 15,000, not Rs 10,000."></textarea>
+<p><button id="nb" style="padding:8px 16px;border-radius:999px;border:0;background:var(--acc);color:#fff;font-weight:600;cursor:pointer">Run update</button> <span id="ns" class="sub"></span></p><pre id="no" class="hide"></pre>
+<p class="sub">Files: <a href="/out/final_plan.json">final_plan.json</a> · <a href="/out/execution_trace.json">execution_trace.json</a> · <a href="/out/rejected_messages.json">rejected_messages.json</a> · <a href="/out/final_report.txt">final_report.txt</a></p></div>`;
+const nb=document.getElementById('nb');if(nb)nb.onclick=async()=>{const t=document.getElementById('nm').value.trim();if(!t)return;
+ nb.disabled=true;document.getElementById('ns').textContent='running (max 60 s)...';
+ const r=await fetch('/api/message',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:t})}).then(r=>r.json()).catch(e=>({output:String(e)}));
+ const o=document.getElementById('no');o.classList.remove('hide');o.textContent=r.output||r.error;document.getElementById('ns').innerHTML='done · <a href="#rej" onclick="location.reload()">reload dashboard</a>';nb.disabled=false};
 show(tabs.some(t=>t[0]===cur)?cur:'plan');
+if(!served)setTimeout(()=>location.reload(),8000);
 </script></body></html>"""
 
 

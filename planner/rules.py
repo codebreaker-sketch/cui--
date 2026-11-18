@@ -101,6 +101,8 @@ def label(text, vals, pos, role):
             out[n] = ("staff", "")
         elif re.match(r"\s*(volunteers?|guests?|helpers?|security|drivers?|media)", after):
             out[n] = ("extra_people", re.match(r"\s*(\w+)", after).group(1))
+        elif re.match(r"\s*judges?\s*(per|for each|for every|on each|har|each)\s*(team|project|group)", after):
+            out[n] = ("judges_per_team", "")
         elif re.match(r"\s*judges?", after) and role in ("judging", "authority") and \
                 re.search(r"confirm|available|coming|arranged|on board|ready|aa rahe|have|now", s):
             out[n] = ("judges", "")
